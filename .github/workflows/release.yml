@@ -1,0 +1,93 @@
+name: Release
+
+# Builds the standalone GUI bundles for Windows, macOS, and Linux and (on a
+# version tag) attaches them to a GitHub Release and publishes to PyPI.
+#
+# - Push a tag like `v0.1.0`      -> build all 3 bundles, create the Release, publish to PyPI.
+# - Run manually (workflow_dispatch) -> build all 3 bundles as downloadable artifacts only
+#                                       (no Release, no PyPI). Use this to test the build.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write        # needed to create the Release and upload assets
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }} bundle
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset: ColdRead-linux-x86_64
+            bundle: dist/ColdRead
+          - os: windows-latest
+            asset: ColdRead-windows-x86_64.exe
+            bundle: dist/ColdRead.exe
+          - os: macos-latest
+            asset: ColdRead-macos-arm64
+            bundle: dist/ColdRead
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Tk (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y python3-tk
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ColdRead + PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pyinstaller
+
+      - name: Build bundle
+        run: pyinstaller ColdRead.spec --noconfirm
+
+      - name: Stage bundle under its release name
+        shell: bash
+        run: |
+          mkdir -p out
+          cp "${{ matrix.bundle }}" "out/${{ matrix.asset }}"
+
+      - name: Upload build artifact (always)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: out/${{ matrix.asset }}
+
+      - name: Attach to Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/${{ matrix.asset }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+
+  pypi:
+    name: Publish to PyPI
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build sdist + wheel
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}

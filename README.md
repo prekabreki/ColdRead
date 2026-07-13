@@ -6,6 +6,28 @@ You've got a script to record, and it fights you the whole way. It's one flat wa
 
 You mostly drive it from a desktop window: drop a script in, flip the toggles you want, and watch the formatted PDF redraw as you go. There's a command line too, for scripting and headless machines.
 
+## Download and run
+
+The easiest way, and the way it's meant to be used — no Python, no terminal:
+
+1. Open the [latest release](https://github.com/prekabreki/ColdRead/releases/latest).
+2. Download the file for your system:
+   - **Windows** — `ColdRead-windows-x86_64.exe`
+   - **macOS** — `ColdRead-macos-arm64` (first launch: right-click ▸ **Open** to clear the "unidentified developer" prompt)
+   - **Linux** — `ColdRead-linux-x86_64` (mark it executable first: `chmod +x ColdRead-linux-x86_64`)
+3. Run it. The GUI opens.
+
+Have Python and prefer a one-liner? Install from PyPI instead:
+
+```bash
+pipx install coldread       # or: pip install coldread
+coldread-gui                # start the app
+```
+
+## Using the GUI
+
+Drop a script onto the window (`.md`, `.txt`, `.pdf`, or `.docx`), review the toggles ColdRead suggests, watch the preview redraw, and export the PDF. Point it at one of the bundled files in `samples/` first to see what it does. To auto-detect the script type and flag tricky proper nouns, ColdRead runs a quick AI analysis pass (see [Configuration](#configuration)); you can also skip it and format straight from archetype defaults.
+
 ## Features
 
 - **Live desktop GUI** — the main way to use it: an inline PDF preview that redraws as you flip toggles, drag-and-drop input, saved toggle presets, and intro/outro textboxes that wrap the formatted output.
@@ -14,62 +36,31 @@ You mostly drive it from a desktop window: drop a script in, flip the toggles yo
 - **Runs without API credit** — do the analysis through the Anthropic API, or your local Claude Code subscription, or skip it entirely with archetype defaults.
 - **Optional diagnostics** — a second pass flags lines the formatter likely misclassified.
 
-## Requirements
+## Run from source
 
-- **Python 3.10 or newer**, including Tk (the standard library's GUI toolkit). The python.org installers for Windows and macOS include it; on Linux you may need your distro's `python3-tk` package.
-- **For the AI analysis step:** an `ANTHROPIC_API_KEY`, *or* the [Claude Code](https://claude.com/claude-code) CLI signed in. Neither is needed if you run with `--no-preflight`.
+For development, or to build your own bundle. You set this up once.
 
-## Install
-
-You only do this once. Follow it line by line, even if you're not a Python person.
-
-**1. Check your Python version.**
+**1. Check your Python** (3.10+, with Tk):
 
 ```bash
-python --version        # on some systems the command is python3
+python --version        # some systems: python3
 ```
 
-It should print 3.10 or higher. If it doesn't, or the command isn't found, install Python from [python.org/downloads](https://www.python.org/downloads/) — on Windows, tick **"Add Python to PATH"** during setup.
+If it's missing or older, install from [python.org/downloads](https://www.python.org/downloads/) — on Windows tick **"Add Python to PATH"**; on Linux you may also need your distro's `python3-tk` package.
 
-**2. Get ColdRead.**
+**2. Get the code and install it:**
 
 ```bash
 git clone https://github.com/prekabreki/ColdRead.git
 cd ColdRead
-```
-
-No git? On the GitHub page, use the green **Code ▸ Download ZIP** button, unzip it, and open a terminal in the unzipped folder.
-
-**3. (Recommended) Create a virtual environment**, so ColdRead's packages stay out of your system Python:
-
-```bash
 python -m venv .venv
-source .venv/bin/activate      # Linux / macOS
-.venv\Scripts\activate         # Windows (PowerShell or cmd)
-```
-
-**4. Install ColdRead.**
-
-```bash
+source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -e .
 ```
 
-Done. You now have the `coldread-gui` and `coldread` commands.
+That gives you the `coldread-gui` and `coldread` commands. Launch the GUI with `coldread-gui`, or double-click `launch.bat` / run `./launch.sh` — the launcher finds your install (or a built bundle) and tells you what's missing instead of failing silently.
 
-## Running it (the GUI)
-
-**ColdRead is meant to be used from its desktop app** — that's where it earns its keep. You drop a script onto the window, flip toggles, and the PDF redraws live, so you see exactly what you'll get before you export it.
-
-Open it either way:
-
-- **Double-click `launch.bat`** (Windows) or **run `./launch.sh`** (Linux/macOS) from the ColdRead folder. This is the no-terminal path: the launcher opens a built bundle if one exists, otherwise your install, and if a dependency is missing it prints exactly what to run instead of failing silently.
-- Or, from a terminal with your environment active, run `coldread-gui`.
-
-Then drop in a script (`.md`, `.txt`, `.pdf`, or `.docx`), review the toggles ColdRead suggests, and export the PDF. Point it at one of the bundled files in `samples/` first to see what it does.
-
-### A standalone app with no Python (optional)
-
-Build a single-file bundle once and hand that around instead:
+**Build a standalone bundle** like the ones on the releases page:
 
 ```bash
 pip install pyinstaller
