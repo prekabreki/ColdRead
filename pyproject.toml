@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "coldread"
+version = "0.1.0"
+description = "Cold-read-optimized PDF formatting for voice-over scripts"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "prekabreki", email = "prekabreki@users.noreply.github.com" }]
+keywords = ["voice-over", "voiceover", "script", "pdf", "cold-read", "reportlab"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Environment :: Console",
+    "Topic :: Multimedia :: Sound/Audio",
+    "Topic :: Text Processing :: Markup",
+]
+dependencies = [
+    "anthropic>=0.40.0",
+    "reportlab>=4.0",
+    "rich>=13.0",
+    "pymupdf>=1.24.0",
+    "python-docx>=1.0.0",
+    "customtkinter>=5.2.0",
+    "tkinterdnd2>=0.3",
+    "CTkToolTip>=0.8",
+]
+
+[project.urls]
+Homepage = "https://github.com/prekabreki/ColdRead"
+Repository = "https://github.com/prekabreki/ColdRead"
+Issues = "https://github.com/prekabreki/ColdRead/issues"
+
+[project.scripts]
+coldread = "vo_format.cli:main"
+
+[project.gui-scripts]
+coldread-gui = "vo_format.gui_main:gui_main"
+
+[tool.setuptools]
+packages = ["vo_format"]

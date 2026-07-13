@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+
+# Test / build artifacts
+.pytest_cache/
+build/
+dist/
+
+# Local editor / agent settings
+.claude/settings.local.json
+
+# OS cruft
+.DS_Store
+Thumbs.db
