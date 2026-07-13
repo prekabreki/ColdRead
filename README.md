@@ -26,7 +26,7 @@ coldread-gui                # start the app
 
 ## Using the GUI
 
-Drop a script onto the window (`.md`, `.txt`, `.pdf`, or `.docx`), review the toggles ColdRead suggests, watch the preview redraw, and export the PDF. Point it at one of the bundled files in `samples/` first to see what it does. To auto-detect the script type and flag tricky proper nouns, ColdRead runs a quick AI analysis pass (see [Configuration](#configuration)); you can also skip it and format straight from archetype defaults.
+Drop a script onto the window (`.md`, `.txt`, `.pdf`, or `.docx`), review the toggles ColdRead suggests, watch the preview redraw, and export the PDF. Point it at one of the bundled sample scripts first to see what it does; they ship with the install, and `coldread --list-samples` prints their paths. To auto-detect the script type and flag tricky proper nouns, ColdRead runs a quick AI analysis pass (see [Configuration](#configuration)); you can also skip it and format straight from archetype defaults.
 
 ## Features
 
@@ -75,7 +75,8 @@ Same engine, no window — handy for scripting or a headless box:
 ```bash
 coldread script.md
 coldread script.md --diagnose --preview
-coldread samples/multi_voice_drama_sample.md --no-preflight --archetype multi_voice_drama   # fully offline, no key
+coldread --list-samples                                   # find the bundled sample scripts
+coldread vo_format/samples/multi_voice_drama_sample.md --no-preflight --archetype multi_voice_drama   # offline, no key
 ```
 
 Run the test suite with `python -m pytest tests/` (no API key needed).
@@ -92,9 +93,9 @@ Extract the text, ask Claude for a structural read of the script (returned as JS
 ## Layout
 
 ```
-vo_format/   the Python package (parser, preflight, formatter, pdf_writer, gui, …)
-tests/       pytest unit tests (no API key required)
-samples/     clean sample inputs, one per archetype
+vo_format/           the Python package (parser, preflight, formatter, pdf_writer, gui, …)
+vo_format/samples/   sample inputs, one per archetype (bundled with the install)
+tests/               pytest unit tests (no API key required)
 ```
 
 See [`CLAUDE.md`](CLAUDE.md) for module responsibilities, the archetype table, and the design invariants.

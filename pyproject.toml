@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "coldread"
-version = "0.1.0"
+version = "0.1.1"
 description = "Cold-read-optimized PDF formatting for voice-over scripts"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -42,3 +42,6 @@ coldread-gui = "vo_format.gui_main:gui_main"
 
 [tool.setuptools]
 packages = ["vo_format"]
+
+[tool.setuptools.package-data]
+vo_format = ["samples/*.md"]

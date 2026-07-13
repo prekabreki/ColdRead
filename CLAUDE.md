@@ -4,7 +4,7 @@ This file provides context for AI coding agents working on ColdRead.
 
 ## Project
 
-**ColdRead** — a Python tool (CLI + CustomTkinter GUI) that turns raw scripts (`.md`, `.txt`, `.pdf`, `.docx`) into cold-read-optimized PDFs for voice-over recording. Code lives in [`vo_format/`](vo_format/) (the import package keeps its original name); [`samples/`](samples/) holds clean sample inputs, one per archetype.
+**ColdRead** — a Python tool (CLI + CustomTkinter GUI) that turns raw scripts (`.md`, `.txt`, `.pdf`, `.docx`) into cold-read-optimized PDFs for voice-over recording. Code lives in [`vo_format/`](vo_format/) (the import package keeps its original name); [`vo_format/samples/`](vo_format/samples/) holds clean sample inputs, one per archetype.
 
 Issue tracking is via GitHub Issues.
 
@@ -30,7 +30,7 @@ pyinstaller ColdRead.spec
 # Windows → dist/ColdRead.exe   ·   Linux/macOS → dist/ColdRead
 ```
 
-There is no linter config or CI — don't invent commands for them. For integration validation beyond the unit tests, run the CLI against the sample scripts in `samples/`.
+There is no linter config or CI — don't invent commands for them. For integration validation beyond the unit tests, run the CLI against the sample scripts in `vo_format/samples/`.
 
 ### Useful CLI flags
 
@@ -87,11 +87,11 @@ The preflight classifies every script into one of five archetypes (`models.Arche
 
 | Archetype | Sample fixture | Defaults emphasize |
 |---|---|---|
-| `document_archive` | `samples/document_archive_sample.md` | source labels on, character colors off |
-| `multi_voice_drama` | `samples/multi_voice_drama_sample.md` | character colors + legend on |
-| `single_narrator` | `samples/single_narrator_sample.md` | `quoted_text_style=indent+italic` |
-| `continuous_prose` | `samples/continuous_prose_sample.md` | breathing marks on, no speaker labels |
-| `mixed_media` | `samples/mixed_media_sample.md` | source labels + character colors on |
+| `document_archive` | `vo_format/samples/document_archive_sample.md` | source labels on, character colors off |
+| `multi_voice_drama` | `vo_format/samples/multi_voice_drama_sample.md` | character colors + legend on |
+| `single_narrator` | `vo_format/samples/single_narrator_sample.md` | `quoted_text_style=indent+italic` |
+| `continuous_prose` | `vo_format/samples/continuous_prose_sample.md` | breathing marks on, no speaker labels |
+| `mixed_media` | `vo_format/samples/mixed_media_sample.md` | source labels + character colors on |
 
 Use these samples when you touch `formatter.py` or archetype defaults.
 

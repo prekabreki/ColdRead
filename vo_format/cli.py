@@ -53,6 +53,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "script_file",
+        nargs="?",
         help="Path to the input script (.txt, .md, .pdf, .docx)",
     )
     parser.add_argument(
@@ -98,6 +99,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--preview",
         action="store_true",
         help="Show styled terminal preview instead of generating PDF",
+    )
+    parser.add_argument(
+        "--list-samples",
+        action="store_true",
+        help="List the bundled sample scripts (with full paths) and exit",
     )
 
     # Toggle flags
@@ -410,9 +416,31 @@ def _display_diagnostic(report) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _list_samples() -> None:
+    """Print the bundled sample scripts and their full paths."""
+    from importlib.resources import files
+    sample_dir = files("vo_format") / "samples"
+    try:
+        names = sorted(p.name for p in sample_dir.iterdir() if p.name.endswith(".md"))
+    except (FileNotFoundError, NotADirectoryError):
+        names = []
+    if not names:
+        console.print("  No bundled samples found.")
+        return
+    console.print("  [bold]Bundled sample scripts[/bold] (pass one as the input path):")
+    for n in names:
+        console.print(f"    {sample_dir / n}")
+
+
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
+
+    if args.list_samples:
+        _list_samples()
+        return
+    if not args.script_file:
+        parser.error("script_file is required (or use --list-samples)")
 
     # Resolve output path
     if args.output:

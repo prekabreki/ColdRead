@@ -5,6 +5,7 @@ from PyInstaller.utils.hooks import collect_data_files
 
 datas = []
 datas += collect_data_files('customtkinter')
+datas += collect_data_files('vo_format', includes=['samples/*.md'])
 
 
 a = Analysis(
