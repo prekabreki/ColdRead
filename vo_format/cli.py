@@ -554,16 +554,22 @@ def main() -> None:
     if toggles.pronunciation_guide and preflight.pronunciation_flags:
         words = [p.word for p in preflight.pronunciation_flags]
         console.print("  Generating pronunciation guide...", end="")
-        pronunciation_guide = run_pronunciation(
-            chosen_backend,
-            words,
-            script_context=f"{preflight.archetype.value.replace('_', ' ')} script",
-            api_key=args.api_key,
-        )
-        if pronunciation_guide:
-            console.print(f" [green]done[/green] ({len(pronunciation_guide)} words)")
-        else:
-            console.print(" [yellow]no results[/yellow]")
+        try:
+            pronunciation_guide = run_pronunciation(
+                chosen_backend,
+                words,
+                script_context=f"{preflight.archetype.value.replace('_', ' ')} script",
+                api_key=args.api_key,
+            )
+            if pronunciation_guide:
+                console.print(f" [green]done[/green] ({len(pronunciation_guide)} words)")
+            else:
+                console.print(" [yellow]no results[/yellow]")
+        except PreflightError as e:
+            console.print(f" [red]failed[/red]")
+            console.print(f"  [red]{e}[/red]")
+            console.print("  Skipping pronunciation guide.")
+            pronunciation_guide = {}
 
     # Step 5: Format
     console.print("  Formatting...", end="")
@@ -646,14 +652,17 @@ def main() -> None:
         console.print(f"  Debug data saved: {debug_path}")
 
         # Run diagnostic API call
-        report = run_diagnostic(
-            chosen_backend,
-            normalized,
-            preflight,
-            blocks,
-            api_key=args.api_key,
-        )
-        _display_diagnostic(report)
+        try:
+            report = run_diagnostic(
+                chosen_backend,
+                normalized,
+                preflight,
+                blocks,
+                api_key=args.api_key,
+            )
+            _display_diagnostic(report)
+        except PreflightError as e:
+            console.print(f"  [red]Diagnostic API call failed: {e}[/red]")
 
     console.print()
 
