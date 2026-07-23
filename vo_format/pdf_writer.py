@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re as _re
 
 from reportlab.lib.colors import Color, HexColor
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
@@ -222,8 +223,6 @@ def _xml_escape(text: str) -> str:
     text = text.replace(">", "&gt;")
     return text
 
-
-import re as _re
 
 # Bold: **text** -> <b>text</b>  (must be matched before italic)
 _RE_MD_BOLD = _re.compile(r"\*\*(.+?)\*\*")
