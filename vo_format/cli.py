@@ -642,15 +642,11 @@ def main() -> None:
 
 
 def _collect_cli_overrides(args: argparse.Namespace) -> dict:
-    """Collect explicitly-set CLI toggle values (exclude None/unset)."""
-    toggle_fields = [
-        "color_characters", "narrator_style", "section_breaks",
-        "stage_directions", "sound_cues", "source_labels",
-        "quoted_text_style", "strip_metadata", "title_page",
-        "character_legend", "breathing_marks", "pause_notation",
-        "pronunciation_guide", "voice_batch", "cold_read_breaks",
-        "font_size", "line_spacing", "margins",
-    ]
+    """Collect explicitly-set CLI toggle values (exclude None/unset).
+
+    Derived from TOGGLE_DEFINITIONS so the field list can never drift.
+    """
+    toggle_fields = [d["name"] for d in TOGGLE_DEFINITIONS]
     overrides = {}
     for field in toggle_fields:
         val = getattr(args, field, None)
