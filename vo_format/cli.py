@@ -463,7 +463,11 @@ def main() -> None:
     console.print(f"  Read {filename} ({line_count} lines, .{file_type})")
 
     # Step 2: Preflight or defaults
-    chosen_backend = resolve_backend(args.backend)
+    try:
+        chosen_backend = resolve_backend(args.backend)
+    except ValueError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
     preflight: PreflightResult | None = None
     if not args.no_preflight:
         console.print(f"  Analyzing script (backend: {chosen_backend})...", end="")
