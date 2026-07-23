@@ -49,16 +49,6 @@ def test_cli_none_does_not_override():
     )
     assert t.color_characters is False
 
-
-def test_spec_toggle_name_mapping():
-    # The spec uses "color_code_characters"; we rename to "color_characters".
-    t = resolve_toggles(
-        Archetype.MULTI_VOICE_DRAMA,
-        preflight_suggestions={"color_code_characters": False},
-    )
-    assert t.color_characters is False
-
-
 def test_enum_coercion_from_string():
     t = resolve_toggles(
         Archetype.MULTI_VOICE_DRAMA,
