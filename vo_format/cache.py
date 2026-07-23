@@ -91,7 +91,7 @@ class PreflightCache:
         if not self._path or not self._path.exists():
             return
         try:
-            with open(self._path, "r", encoding="utf-8") as f:
+            with open(self._path, encoding="utf-8") as f:
                 raw: dict[str, Any] = json.load(f)
             for key, val in raw.items():
                 try:

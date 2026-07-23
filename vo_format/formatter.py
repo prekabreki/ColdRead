@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from typing import Optional
 
 from .colors import (
     NARRATOR_COLOR,
@@ -21,10 +20,10 @@ from .models import (
     QuotedTextStyle,
 )
 
-
 # ---------------------------------------------------------------------------
 # Markdown helpers
 # ---------------------------------------------------------------------------
+
 
 def _strip_md_bold(text: str) -> str:
     """Remove markdown bold markers (**text** -> text)."""
@@ -58,14 +57,10 @@ def _strip_all_md(text: str) -> str:
 # ---------------------------------------------------------------------------
 
 # **CHARACTER_NAME:** or **CHARACTER NAME:** (bold character with colon)
-RE_BOLD_CHARACTER = re.compile(
-    r"^\*\*([A-Z][A-Z0-9\s''()\-]+?):\*\*\s*(.*)"
-)
+RE_BOLD_CHARACTER = re.compile(r"^\*\*([A-Z][A-Z0-9\s''()\-]+?):\*\*\s*(.*)")
 
 # CHARACTER_NAME: (plain text, all-caps name with colon)
-RE_PLAIN_CHARACTER = re.compile(
-    r"^([A-Z][A-Z0-9\s''()\-]+?):\s+(.*)"
-)
+RE_PLAIN_CHARACTER = re.compile(r"^([A-Z][A-Z0-9\s''()\-]+?):\s+(.*)")
 
 # Stage direction: *(text)* or *(text)*  (italic parenthetical)
 RE_STAGE_DIRECTION_PAREN = re.compile(r"^\*\((.+?)\)\*$")
@@ -100,14 +95,10 @@ RE_QUOTED_SINGLE = re.compile(r'^\*"(.+?)"\*\s*$')
 # ---------------------------------------------------------------------------
 
 # "Document Archive Section X: Title" (Bloodborne style)
-RE_DOC_ARCHIVE_SECTION = re.compile(
-    r"^Document Archive Section\s+([A-Z]):\s*(.+)", re.IGNORECASE
-)
+RE_DOC_ARCHIVE_SECTION = re.compile(r"^Document Archive Section\s+([A-Z]):\s*(.+)", re.IGNORECASE)
 
 # "Document Archive X-NNN: Title" (Deus Ex style)
-RE_DOC_ARCHIVE_CODE = re.compile(
-    r"^Document Archive\s+([A-Z]-?\w+):\s*(.+)", re.IGNORECASE
-)
+RE_DOC_ARCHIVE_CODE = re.compile(r"^Document Archive\s+([A-Z]-?\w+):\s*(.+)", re.IGNORECASE)
 
 # "Document Reference: CODE-NNN"
 RE_DOC_REF = re.compile(r"^Document Reference:\s*(.+)", re.IGNORECASE)
@@ -116,9 +107,7 @@ RE_DOC_REF = re.compile(r"^Document Reference:\s*(.+)", re.IGNORECASE)
 RE_EMAIL_HEADER = re.compile(r"^FROM:\s*(.+)", re.IGNORECASE)
 
 # "LAZARUS UNAUTHORIZED TRANSMISSION - LAZ_NNN"
-RE_TRANSMISSION = re.compile(
-    r"^([A-Z][A-Z\s]+(?:UNAUTHORIZED\s+)?TRANSMISSION)\s*[-\u2014]\s*(\S+)", re.IGNORECASE
-)
+RE_TRANSMISSION = re.compile(r"^([A-Z][A-Z\s]+(?:UNAUTHORIZED\s+)?TRANSMISSION)\s*[-\u2014]\s*(\S+)", re.IGNORECASE)
 
 # "PICUS NEWS NETWORK TRANSCRIPT" or similar broadcast labels
 RE_BROADCAST = re.compile(
@@ -139,14 +128,13 @@ RE_PLAIN_STAGE_DIRECTION = re.compile(r"^\[([^\]]+)\]$")
 RE_PLAIN_SOUND_CUE = re.compile(r"^\[(Sound of .+|[A-Z][A-Z\s.,;:'\-]+)\]$")
 
 # All-caps org header: "SARIF INDUSTRIES - COMPANY OVERVIEW"
-RE_ORG_HEADER = re.compile(
-    r"^([A-Z][A-Z\s]+(?:INDUSTRIES|ASSOCIATES|CORPORATION|CORP))\s*[-\u2014]\s*(.+)"
-)
+RE_ORG_HEADER = re.compile(r"^([A-Z][A-Z\s]+(?:INDUSTRIES|ASSOCIATES|CORPORATION|CORP))\s*[-\u2014]\s*(.+)")
 
 
 # ---------------------------------------------------------------------------
 # Metadata stripping
 # ---------------------------------------------------------------------------
+
 
 def _strip_metadata_blocks(
     lines: list[str],
@@ -184,7 +172,7 @@ _HARDCODED_SOURCE_PATTERNS: list[tuple[re.Pattern, str, object]] = [
     (RE_BROADCAST, "broadcast", lambda m: m.group(1).strip()),
     (RE_ORG_HEADER, "corporate_document", lambda m: f"{m.group(1).strip()} - {m.group(2).strip()}"),
     (RE_EMAIL_HEADER, "email", lambda m: m.group(0).strip()),
-    (RE_NEWS_TICKER, "news_ticker", lambda m: f"News Ticker"),
+    (RE_NEWS_TICKER, "news_ticker", lambda m: "News Ticker"),
     (RE_NARRATIVE_LABEL, "narrative_label", lambda m: m.group(0).strip()),
 ]
 
@@ -207,7 +195,7 @@ def _compile_source_patterns(
         elif st.label and st.label.strip():
             label = re.escape(st.label.strip())
             pat = re.compile(rf"^{label}\s*$", re.IGNORECASE)
-            patterns.append((pat, st.type, lambda m, l=st.label: l.strip()))
+            patterns.append((pat, st.type, lambda m, _label=st.label: _label.strip()))
 
     return patterns
 
@@ -230,6 +218,7 @@ def _match_source_label(
 # ---------------------------------------------------------------------------
 # Archetype formatters
 # ---------------------------------------------------------------------------
+
 
 def _get_character_color(
     name: str,
@@ -268,7 +257,7 @@ def _format_multi_voice_drama(
     """Format a multi-voice drama script (Warcraft, Warhammer style)."""
     blocks: list[FormattedBlock] = []
     known_names = {c.name.upper(): c.name for c in preflight.characters}
-    current_speaker: Optional[str] = None
+    current_speaker: str | None = None
     first_section = True
 
     for line_num, raw_line in numbered_lines:
@@ -276,11 +265,13 @@ def _format_multi_voice_drama(
 
         # Blank line
         if not line:
-            blocks.append(FormattedBlock(
-                block_type=BlockType.BLANK_LINE,
-                text="",
-                source_line=line_num,
-            ))
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.BLANK_LINE,
+                    text="",
+                    source_line=line_num,
+                )
+            )
             continue
 
         # Image reference — skip
@@ -289,12 +280,14 @@ def _format_multi_voice_drama(
 
         # Horizontal rule
         if RE_HORIZONTAL_RULE.match(line):
-            blocks.append(FormattedBlock(
-                block_type=BlockType.SECTION_DIVIDER,
-                text="",
-                source_line=line_num,
-                match_pattern="RE_HORIZONTAL_RULE",
-            ))
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.SECTION_DIVIDER,
+                    text="",
+                    source_line=line_num,
+                    match_pattern="RE_HORIZONTAL_RULE",
+                )
+            )
             current_speaker = None
             continue
 
@@ -325,16 +318,18 @@ def _format_multi_voice_drama(
         # Sound cue: **[TEXT]**
         m = RE_SOUND_CUE.match(line)
         if m and toggles.sound_cues:
-            blocks.append(FormattedBlock(
-                block_type=BlockType.SOUND_CUE,
-                text=f"[{m.group(1)}]",
-                color=SOUND_CUE_COLOR,
-                italic=False,
-                is_centered=True,
-                font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
-                source_line=line_num,
-                match_pattern="RE_SOUND_CUE",
-            ))
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.SOUND_CUE,
+                    text=f"[{m.group(1)}]",
+                    color=SOUND_CUE_COLOR,
+                    italic=False,
+                    is_centered=True,
+                    font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
+                    source_line=line_num,
+                    match_pattern="RE_SOUND_CUE",
+                )
+            )
             continue
         elif m and not toggles.sound_cues:
             continue
@@ -342,17 +337,19 @@ def _format_multi_voice_drama(
         # Stage direction (italic parenthetical): *(text)*
         m = RE_STAGE_DIRECTION_PAREN.match(line)
         if m and toggles.stage_directions:
-            blocks.append(FormattedBlock(
-                block_type=BlockType.STAGE_DIRECTION,
-                text=f"({m.group(1)})",
-                color=STAGE_DIRECTION_COLOR,
-                italic=True,
-                indent_level=1,
-                font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
-                source_line=line_num,
-                match_pattern="RE_STAGE_DIRECTION_PAREN",
-                speaker=current_speaker,
-            ))
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.STAGE_DIRECTION,
+                    text=f"({m.group(1)})",
+                    color=STAGE_DIRECTION_COLOR,
+                    italic=True,
+                    indent_level=1,
+                    font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
+                    source_line=line_num,
+                    match_pattern="RE_STAGE_DIRECTION_PAREN",
+                    speaker=current_speaker,
+                )
+            )
             continue
         elif m and not toggles.stage_directions:
             continue
@@ -360,17 +357,19 @@ def _format_multi_voice_drama(
         # Stage direction (italic bracketed): *[text]*
         m = RE_STAGE_DIRECTION_BRACKET.match(line)
         if m and toggles.stage_directions:
-            blocks.append(FormattedBlock(
-                block_type=BlockType.STAGE_DIRECTION,
-                text=f"[{m.group(1)}]",
-                color=STAGE_DIRECTION_COLOR,
-                italic=True,
-                indent_level=1,
-                font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
-                source_line=line_num,
-                match_pattern="RE_STAGE_DIRECTION_BRACKET",
-                speaker=current_speaker,
-            ))
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.STAGE_DIRECTION,
+                    text=f"[{m.group(1)}]",
+                    color=STAGE_DIRECTION_COLOR,
+                    italic=True,
+                    indent_level=1,
+                    font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
+                    source_line=line_num,
+                    match_pattern="RE_STAGE_DIRECTION_BRACKET",
+                    speaker=current_speaker,
+                )
+            )
             continue
         elif m and not toggles.stage_directions:
             continue
@@ -385,27 +384,31 @@ def _format_multi_voice_drama(
             char_color = _get_character_color(canonical_name, color_map, toggles)
             current_speaker = canonical_name
 
-            blocks.append(FormattedBlock(
-                block_type=BlockType.CHARACTER_NAME,
-                text=f"{canonical_name}:",
-                color=char_color,
-                bold=True,
-                keep_with_next=True,
-                source_line=line_num,
-                match_pattern="RE_BOLD_CHARACTER",
-                speaker=canonical_name,
-            ))
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.CHARACTER_NAME,
+                    text=f"{canonical_name}:",
+                    color=char_color,
+                    bold=True,
+                    keep_with_next=True,
+                    source_line=line_num,
+                    match_pattern="RE_BOLD_CHARACTER",
+                    speaker=canonical_name,
+                )
+            )
 
             # If there's dialogue on the same line
             if remainder:
-                blocks.append(FormattedBlock(
-                    block_type=BlockType.DIALOGUE,
-                    text=_strip_all_md(remainder),
-                    color=char_color,
-                    indent_level=1,
-                    source_line=line_num,
-                    speaker=canonical_name,
-                ))
+                blocks.append(
+                    FormattedBlock(
+                        block_type=BlockType.DIALOGUE,
+                        text=_strip_all_md(remainder),
+                        color=char_color,
+                        indent_level=1,
+                        source_line=line_num,
+                        speaker=canonical_name,
+                    )
+                )
             continue
 
         # Plain character name: NAME: (only if name is in known characters)
@@ -418,40 +421,46 @@ def _format_multi_voice_drama(
                 char_color = _get_character_color(canonical_name, color_map, toggles)
                 current_speaker = canonical_name
 
-                blocks.append(FormattedBlock(
-                    block_type=BlockType.CHARACTER_NAME,
-                    text=f"{canonical_name}:",
-                    color=char_color,
-                    bold=True,
-                    keep_with_next=True,
-                    source_line=line_num,
-                    match_pattern="RE_PLAIN_CHARACTER",
-                    speaker=canonical_name,
-                ))
+                blocks.append(
+                    FormattedBlock(
+                        block_type=BlockType.CHARACTER_NAME,
+                        text=f"{canonical_name}:",
+                        color=char_color,
+                        bold=True,
+                        keep_with_next=True,
+                        source_line=line_num,
+                        match_pattern="RE_PLAIN_CHARACTER",
+                        speaker=canonical_name,
+                    )
+                )
 
                 if remainder:
-                    blocks.append(FormattedBlock(
-                        block_type=BlockType.DIALOGUE,
-                        text=_strip_all_md(remainder),
-                        color=char_color,
-                        indent_level=1,
-                        source_line=line_num,
-                        speaker=canonical_name,
-                    ))
+                    blocks.append(
+                        FormattedBlock(
+                            block_type=BlockType.DIALOGUE,
+                            text=_strip_all_md(remainder),
+                            color=char_color,
+                            indent_level=1,
+                            source_line=line_num,
+                            speaker=canonical_name,
+                        )
+                    )
                 continue
 
         # Default: dialogue or narration
         cleaned = _strip_all_md(line)
         if current_speaker:
             char_color = _get_character_color(current_speaker, color_map, toggles)
-            blocks.append(FormattedBlock(
-                block_type=BlockType.DIALOGUE,
-                text=cleaned,
-                color=char_color,
-                indent_level=1,
-                source_line=line_num,
-                speaker=current_speaker,
-            ))
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.DIALOGUE,
+                    text=cleaned,
+                    color=char_color,
+                    indent_level=1,
+                    source_line=line_num,
+                    speaker=current_speaker,
+                )
+            )
         else:
             blocks.append(_make_narrator_block(line, toggles, source_line=line_num))
 
@@ -467,7 +476,7 @@ def _format_single_narrator(
     """Format a single-narrator script (FFXII style)."""
     blocks: list[FormattedBlock] = []
     known_names = {c.name.upper(): c.name for c in preflight.characters}
-    current_speaker: Optional[str] = None
+    current_speaker: str | None = None
     in_quoted_block = False
     first_section = True
 
@@ -476,11 +485,13 @@ def _format_single_narrator(
 
         # Blank line
         if not line:
-            blocks.append(FormattedBlock(
-                block_type=BlockType.BLANK_LINE,
-                text="",
-                source_line=line_num,
-            ))
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.BLANK_LINE,
+                    text="",
+                    source_line=line_num,
+                )
+            )
             if in_quoted_block:
                 # Blank line within a quoted block is fine — quotes can span paragraphs
                 pass
@@ -494,11 +505,13 @@ def _format_single_narrator(
         if RE_HORIZONTAL_RULE.match(line):
             # End quoted block if one was open
             in_quoted_block = False
-            blocks.append(FormattedBlock(
-                block_type=BlockType.SECTION_DIVIDER,
-                text="",
-                source_line=line_num,
-            ))
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.SECTION_DIVIDER,
+                    text="",
+                    source_line=line_num,
+                )
+            )
             current_speaker = None
             continue
 
@@ -529,46 +542,52 @@ def _format_single_narrator(
         m = RE_SOUND_CUE.match(line)
         if m:
             if toggles.sound_cues:
-                blocks.append(FormattedBlock(
-                    block_type=BlockType.SOUND_CUE,
-                    text=f"[{m.group(1)}]",
-                    color=SOUND_CUE_COLOR,
-                    is_centered=True,
-                    font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
-                    source_line=line_num,
-                ))
+                blocks.append(
+                    FormattedBlock(
+                        block_type=BlockType.SOUND_CUE,
+                        text=f"[{m.group(1)}]",
+                        color=SOUND_CUE_COLOR,
+                        is_centered=True,
+                        font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
+                        source_line=line_num,
+                    )
+                )
             continue
 
         # Stage direction (parenthetical)
         m = RE_STAGE_DIRECTION_PAREN.match(line)
         if m:
             if toggles.stage_directions:
-                blocks.append(FormattedBlock(
-                    block_type=BlockType.STAGE_DIRECTION,
-                    text=f"({m.group(1)})",
-                    color=STAGE_DIRECTION_COLOR,
-                    italic=True,
-                    indent_level=1,
-                    font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
-                    source_line=line_num,
-                    speaker=current_speaker,
-                ))
+                blocks.append(
+                    FormattedBlock(
+                        block_type=BlockType.STAGE_DIRECTION,
+                        text=f"({m.group(1)})",
+                        color=STAGE_DIRECTION_COLOR,
+                        italic=True,
+                        indent_level=1,
+                        font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
+                        source_line=line_num,
+                        speaker=current_speaker,
+                    )
+                )
             continue
 
         # Stage direction (bracketed)
         m = RE_STAGE_DIRECTION_BRACKET.match(line)
         if m:
             if toggles.stage_directions:
-                blocks.append(FormattedBlock(
-                    block_type=BlockType.STAGE_DIRECTION,
-                    text=f"[{m.group(1)}]",
-                    color=STAGE_DIRECTION_COLOR,
-                    italic=True,
-                    indent_level=1,
-                    font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
-                    source_line=line_num,
-                    speaker=current_speaker,
-                ))
+                blocks.append(
+                    FormattedBlock(
+                        block_type=BlockType.STAGE_DIRECTION,
+                        text=f"[{m.group(1)}]",
+                        color=STAGE_DIRECTION_COLOR,
+                        italic=True,
+                        indent_level=1,
+                        font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
+                        source_line=line_num,
+                        speaker=current_speaker,
+                    )
+                )
             continue
 
         # Bold character name
@@ -581,25 +600,29 @@ def _format_single_narrator(
             char_color = _get_character_color(canonical_name, color_map, toggles)
             current_speaker = canonical_name
 
-            blocks.append(FormattedBlock(
-                block_type=BlockType.CHARACTER_NAME,
-                text=f"{canonical_name}:",
-                color=char_color,
-                bold=True,
-                keep_with_next=True,
-                source_line=line_num,
-                speaker=canonical_name,
-            ))
-
-            if remainder:
-                blocks.append(FormattedBlock(
-                    block_type=BlockType.DIALOGUE,
-                    text=_strip_all_md(remainder),
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.CHARACTER_NAME,
+                    text=f"{canonical_name}:",
                     color=char_color,
-                    indent_level=1,
+                    bold=True,
+                    keep_with_next=True,
                     source_line=line_num,
                     speaker=canonical_name,
-                ))
+                )
+            )
+
+            if remainder:
+                blocks.append(
+                    FormattedBlock(
+                        block_type=BlockType.DIALOGUE,
+                        text=_strip_all_md(remainder),
+                        color=char_color,
+                        indent_level=1,
+                        source_line=line_num,
+                        speaker=canonical_name,
+                    )
+                )
             continue
 
         # Single-line quoted text: *"text"*
@@ -607,14 +630,16 @@ def _format_single_narrator(
         if m:
             text = m.group(1)
             indent, italic = _quoted_style(toggles)
-            blocks.append(FormattedBlock(
-                block_type=BlockType.QUOTED_TEXT,
-                text=f'"{text}"',
-                color=NARRATOR_COLOR,
-                italic=italic,
-                indent_level=indent,
-                source_line=line_num,
-            ))
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.QUOTED_TEXT,
+                    text=f'"{text}"',
+                    color=NARRATOR_COLOR,
+                    italic=italic,
+                    indent_level=indent,
+                    source_line=line_num,
+                )
+            )
             in_quoted_block = False
             continue
 
@@ -623,14 +648,16 @@ def _format_single_narrator(
         if m:
             text = m.group(1)
             indent, italic = _quoted_style(toggles)
-            blocks.append(FormattedBlock(
-                block_type=BlockType.QUOTED_TEXT,
-                text=f'"{text}',
-                color=NARRATOR_COLOR,
-                italic=italic,
-                indent_level=indent,
-                source_line=line_num,
-            ))
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.QUOTED_TEXT,
+                    text=f'"{text}',
+                    color=NARRATOR_COLOR,
+                    italic=italic,
+                    indent_level=indent,
+                    source_line=line_num,
+                )
+            )
             in_quoted_block = True
             continue
 
@@ -640,14 +667,16 @@ def _format_single_narrator(
             if m:
                 text = m.group(1)
                 indent, italic = _quoted_style(toggles)
-                blocks.append(FormattedBlock(
-                    block_type=BlockType.QUOTED_TEXT,
-                    text=f'{text}"',
-                    color=NARRATOR_COLOR,
-                    italic=italic,
-                    indent_level=indent,
-                    source_line=line_num,
-                ))
+                blocks.append(
+                    FormattedBlock(
+                        block_type=BlockType.QUOTED_TEXT,
+                        text=f'{text}"',
+                        color=NARRATOR_COLOR,
+                        italic=italic,
+                        indent_level=indent,
+                        source_line=line_num,
+                    )
+                )
                 in_quoted_block = False
                 continue
             else:
@@ -655,14 +684,16 @@ def _format_single_narrator(
                 indent, italic = _quoted_style(toggles)
                 # Strip italic markers if present
                 cleaned = _strip_md_italic(line)
-                blocks.append(FormattedBlock(
-                    block_type=BlockType.QUOTED_TEXT,
-                    text=cleaned,
-                    color=NARRATOR_COLOR,
-                    italic=italic,
-                    indent_level=indent,
-                    source_line=line_num,
-                ))
+                blocks.append(
+                    FormattedBlock(
+                        block_type=BlockType.QUOTED_TEXT,
+                        text=cleaned,
+                        color=NARRATOR_COLOR,
+                        italic=italic,
+                        indent_level=indent,
+                        source_line=line_num,
+                    )
+                )
                 continue
 
         # Default: narration
@@ -699,11 +730,13 @@ def _format_continuous_prose(
 
         # Blank line -> paragraph separator
         if not line:
-            blocks.append(FormattedBlock(
-                block_type=BlockType.BLANK_LINE,
-                text="",
-                source_line=line_num,
-            ))
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.BLANK_LINE,
+                    text="",
+                    source_line=line_num,
+                )
+            )
             continue
 
         # Image reference — skip
@@ -712,11 +745,13 @@ def _format_continuous_prose(
 
         # Horizontal rule
         if RE_HORIZONTAL_RULE.match(line):
-            blocks.append(FormattedBlock(
-                block_type=BlockType.SECTION_DIVIDER,
-                text="",
-                source_line=line_num,
-            ))
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.SECTION_DIVIDER,
+                    text="",
+                    source_line=line_num,
+                )
+            )
             continue
 
         # Section header
@@ -743,12 +778,14 @@ def _format_continuous_prose(
         # Prose paragraph line
         cleaned = _strip_all_md(line)
         if cleaned:
-            blocks.append(FormattedBlock(
-                block_type=BlockType.PROSE,
-                text=cleaned,
-                color=NARRATOR_COLOR,
-                source_line=line_num,
-            ))
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.PROSE,
+                    text=cleaned,
+                    color=NARRATOR_COLOR,
+                    source_line=line_num,
+                )
+            )
 
     return blocks
 
@@ -778,11 +815,13 @@ def _format_document_archive(
 
         # Blank line
         if not line:
-            blocks.append(FormattedBlock(
-                block_type=BlockType.BLANK_LINE,
-                text="",
-                source_line=line_num,
-            ))
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.BLANK_LINE,
+                    text="",
+                    source_line=line_num,
+                )
+            )
             continue
 
         # Image reference — skip
@@ -791,22 +830,26 @@ def _format_document_archive(
 
         # Horizontal rule
         if RE_HORIZONTAL_RULE.match(line):
-            blocks.append(FormattedBlock(
-                block_type=BlockType.SECTION_DIVIDER,
-                text="",
-                source_line=line_num,
-            ))
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.SECTION_DIVIDER,
+                    text="",
+                    source_line=line_num,
+                )
+            )
             continue
 
         # Markdown section header (## text)
         m = RE_SECTION_HEADER.match(line)
         if m:
             if in_source_block:
-                blocks.append(FormattedBlock(
-                    block_type=BlockType.SOURCE_LABEL_CLOSE,
-                    text="",
-                    source_line=line_num,
-                ))
+                blocks.append(
+                    FormattedBlock(
+                        block_type=BlockType.SOURCE_LABEL_CLOSE,
+                        text="",
+                        source_line=line_num,
+                    )
+                )
                 in_source_block = False
             title = m.group(1).strip()
             if title.startswith("[") and title.endswith("]"):
@@ -834,30 +877,36 @@ def _format_document_archive(
         if doc_ref_m:
             # Close previous source block if it was a doc ref
             if in_source_block:
-                blocks.append(FormattedBlock(
-                    block_type=BlockType.SOURCE_LABEL_CLOSE,
-                    text="",
+                blocks.append(
+                    FormattedBlock(
+                        block_type=BlockType.SOURCE_LABEL_CLOSE,
+                        text="",
+                        source_line=line_num,
+                    )
+                )
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.SOURCE_LABEL_OPEN,
+                    text=f"Document Reference: {doc_ref_m.group(1).strip()}",
+                    source_type="document_ref",
+                    bold=True,
+                    is_centered=True,
                     source_line=line_num,
-                ))
-            blocks.append(FormattedBlock(
-                block_type=BlockType.SOURCE_LABEL_OPEN,
-                text=f"Document Reference: {doc_ref_m.group(1).strip()}",
-                source_type="document_ref",
-                bold=True,
-                is_centered=True,
-                source_line=line_num,
-            ))
+                )
+            )
             in_source_block = True
             continue
 
         # Document Archive Section header (major section divider)
         if match_result and match_result[0] == "document_section":
             if in_source_block:
-                blocks.append(FormattedBlock(
-                    block_type=BlockType.SOURCE_LABEL_CLOSE,
-                    text="",
-                    source_line=line_num,
-                ))
+                blocks.append(
+                    FormattedBlock(
+                        block_type=BlockType.SOURCE_LABEL_CLOSE,
+                        text="",
+                        source_line=line_num,
+                    )
+                )
                 in_source_block = False
             source_type, label = match_result
             block = FormattedBlock(
@@ -879,11 +928,13 @@ def _format_document_archive(
         # Narrative label (Opening/Closing Narrative)
         if match_result and match_result[0] == "narrative_label":
             if in_source_block:
-                blocks.append(FormattedBlock(
-                    block_type=BlockType.SOURCE_LABEL_CLOSE,
-                    text="",
-                    source_line=line_num,
-                ))
+                blocks.append(
+                    FormattedBlock(
+                        block_type=BlockType.SOURCE_LABEL_CLOSE,
+                        text="",
+                        source_line=line_num,
+                    )
+                )
                 in_source_block = False
             _, label = match_result
             block = FormattedBlock(
@@ -903,34 +954,40 @@ def _format_document_archive(
         # Other source label match (if not already handled above)
         if match_result and match_result[0] not in ("document_section", "narrative_label"):
             if in_source_block:
-                blocks.append(FormattedBlock(
-                    block_type=BlockType.SOURCE_LABEL_CLOSE,
-                    text="",
-                    source_line=line_num,
-                ))
+                blocks.append(
+                    FormattedBlock(
+                        block_type=BlockType.SOURCE_LABEL_CLOSE,
+                        text="",
+                        source_line=line_num,
+                    )
+                )
             source_type, label = match_result
-            blocks.append(FormattedBlock(
-                block_type=BlockType.SOURCE_LABEL_OPEN,
-                text=label,
-                source_type=source_type,
-                bold=True,
-                is_centered=True,
-                source_line=line_num,
-            ))
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.SOURCE_LABEL_OPEN,
+                    text=label,
+                    source_type=source_type,
+                    bold=True,
+                    is_centered=True,
+                    source_line=line_num,
+                )
+            )
             in_source_block = True
             continue
 
         # Plain-text sound cue: [Sound of ...] or [ALL CAPS TEXT]
         m = RE_PLAIN_SOUND_CUE.match(line)
         if m and toggles.sound_cues:
-            blocks.append(FormattedBlock(
-                block_type=BlockType.SOUND_CUE,
-                text=f"[{m.group(1)}]" if not line.startswith("[") else line,
-                color=SOUND_CUE_COLOR,
-                is_centered=True,
-                font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
-                source_line=line_num,
-            ))
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.SOUND_CUE,
+                    text=f"[{m.group(1)}]" if not line.startswith("[") else line,
+                    color=SOUND_CUE_COLOR,
+                    is_centered=True,
+                    font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
+                    source_line=line_num,
+                )
+            )
             continue
         elif m and not toggles.sound_cues:
             continue
@@ -938,15 +995,17 @@ def _format_document_archive(
         # Plain-text stage direction: [text in brackets]
         m = RE_PLAIN_STAGE_DIRECTION.match(line)
         if m and toggles.stage_directions:
-            blocks.append(FormattedBlock(
-                block_type=BlockType.STAGE_DIRECTION,
-                text=line,
-                color=STAGE_DIRECTION_COLOR,
-                italic=True,
-                indent_level=1,
-                font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
-                source_line=line_num,
-            ))
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.STAGE_DIRECTION,
+                    text=line,
+                    color=STAGE_DIRECTION_COLOR,
+                    italic=True,
+                    indent_level=1,
+                    font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
+                    source_line=line_num,
+                )
+            )
             continue
         elif m and not toggles.stage_directions:
             continue
@@ -954,14 +1013,16 @@ def _format_document_archive(
         # Markdown sound cue: **[TEXT]**
         m = RE_SOUND_CUE.match(line)
         if m and toggles.sound_cues:
-            blocks.append(FormattedBlock(
-                block_type=BlockType.SOUND_CUE,
-                text=f"[{m.group(1)}]",
-                color=SOUND_CUE_COLOR,
-                is_centered=True,
-                font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
-                source_line=line_num,
-            ))
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.SOUND_CUE,
+                    text=f"[{m.group(1)}]",
+                    color=SOUND_CUE_COLOR,
+                    is_centered=True,
+                    font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
+                    source_line=line_num,
+                )
+            )
             continue
         elif m and not toggles.sound_cues:
             continue
@@ -969,30 +1030,34 @@ def _format_document_archive(
         # Markdown stage directions
         m = RE_STAGE_DIRECTION_PAREN.match(line)
         if m and toggles.stage_directions:
-            blocks.append(FormattedBlock(
-                block_type=BlockType.STAGE_DIRECTION,
-                text=f"({m.group(1)})",
-                color=STAGE_DIRECTION_COLOR,
-                italic=True,
-                indent_level=1,
-                font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
-                source_line=line_num,
-            ))
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.STAGE_DIRECTION,
+                    text=f"({m.group(1)})",
+                    color=STAGE_DIRECTION_COLOR,
+                    italic=True,
+                    indent_level=1,
+                    font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
+                    source_line=line_num,
+                )
+            )
             continue
         elif m and not toggles.stage_directions:
             continue
 
         m = RE_STAGE_DIRECTION_BRACKET.match(line)
         if m and toggles.stage_directions:
-            blocks.append(FormattedBlock(
-                block_type=BlockType.STAGE_DIRECTION,
-                text=f"[{m.group(1)}]",
-                color=STAGE_DIRECTION_COLOR,
-                italic=True,
-                indent_level=1,
-                font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
-                source_line=line_num,
-            ))
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.STAGE_DIRECTION,
+                    text=f"[{m.group(1)}]",
+                    color=STAGE_DIRECTION_COLOR,
+                    italic=True,
+                    indent_level=1,
+                    font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
+                    source_line=line_num,
+                )
+            )
             continue
         elif m and not toggles.stage_directions:
             continue
@@ -1007,10 +1072,12 @@ def _format_document_archive(
 
     # Close any open source block
     if in_source_block:
-        blocks.append(FormattedBlock(
-            block_type=BlockType.SOURCE_LABEL_CLOSE,
-            text="",
-        ))
+        blocks.append(
+            FormattedBlock(
+                block_type=BlockType.SOURCE_LABEL_CLOSE,
+                text="",
+            )
+        )
 
     return blocks
 
@@ -1033,7 +1100,7 @@ def _format_mixed_media(
     blocks: list[FormattedBlock] = []
     source_patterns = _compile_source_patterns(preflight.source_types)
     known_names = {c.name.upper(): c.name for c in preflight.characters}
-    current_speaker: Optional[str] = None
+    current_speaker: str | None = None
     in_source_block = False
     first_section = True
 
@@ -1042,11 +1109,13 @@ def _format_mixed_media(
 
         # Blank line
         if not line:
-            blocks.append(FormattedBlock(
-                block_type=BlockType.BLANK_LINE,
-                text="",
-                source_line=line_num,
-            ))
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.BLANK_LINE,
+                    text="",
+                    source_line=line_num,
+                )
+            )
             continue
 
         # Image reference — skip
@@ -1055,11 +1124,13 @@ def _format_mixed_media(
 
         # Horizontal rule
         if RE_HORIZONTAL_RULE.match(line):
-            blocks.append(FormattedBlock(
-                block_type=BlockType.SECTION_DIVIDER,
-                text="",
-                source_line=line_num,
-            ))
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.SECTION_DIVIDER,
+                    text="",
+                    source_line=line_num,
+                )
+            )
             current_speaker = None
             continue
 
@@ -1067,11 +1138,13 @@ def _format_mixed_media(
         m = RE_SECTION_HEADER.match(line)
         if m:
             if in_source_block:
-                blocks.append(FormattedBlock(
-                    block_type=BlockType.SOURCE_LABEL_CLOSE,
-                    text="",
-                    source_line=line_num,
-                ))
+                blocks.append(
+                    FormattedBlock(
+                        block_type=BlockType.SOURCE_LABEL_CLOSE,
+                        text="",
+                        source_line=line_num,
+                    )
+                )
                 in_source_block = False
             title = m.group(1).strip()
             if title.startswith("[") and title.endswith("]"):
@@ -1098,11 +1171,13 @@ def _format_mixed_media(
         # Document Archive headers act as section dividers
         if match_result and match_result[0] in ("document_archive", "document_section"):
             if in_source_block:
-                blocks.append(FormattedBlock(
-                    block_type=BlockType.SOURCE_LABEL_CLOSE,
-                    text="",
-                    source_line=line_num,
-                ))
+                blocks.append(
+                    FormattedBlock(
+                        block_type=BlockType.SOURCE_LABEL_CLOSE,
+                        text="",
+                        source_line=line_num,
+                    )
+                )
             source_type, label = match_result
             block = FormattedBlock(
                 block_type=BlockType.SOURCE_LABEL_OPEN,
@@ -1126,51 +1201,61 @@ def _format_mixed_media(
 
             # News tickers are content, not containers
             if source_type == "news_ticker":
-                blocks.append(FormattedBlock(
-                    block_type=BlockType.NARRATION,
-                    text=line,
-                    color=NARRATOR_COLOR,
-                    italic=True,
-                    indent_level=1,
-                    font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
-                    source_line=line_num,
-                ))
+                blocks.append(
+                    FormattedBlock(
+                        block_type=BlockType.NARRATION,
+                        text=line,
+                        color=NARRATOR_COLOR,
+                        italic=True,
+                        indent_level=1,
+                        font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
+                        source_line=line_num,
+                    )
+                )
                 continue
 
             # Emails within an existing source block: render as a styled
             # sub-header, not a container (no open/close nesting)
             if source_type == "email" and in_source_block:
-                blocks.append(FormattedBlock(
-                    block_type=BlockType.BLANK_LINE,
-                    text="",
-                ))
-                blocks.append(FormattedBlock(
-                    block_type=BlockType.NARRATION,
-                    text=label,
-                    color=NARRATOR_COLOR,
-                    bold=True,
-                    indent_level=0,
-                    source_line=line_num,
-                    source_type=source_type,
-                ))
+                blocks.append(
+                    FormattedBlock(
+                        block_type=BlockType.BLANK_LINE,
+                        text="",
+                    )
+                )
+                blocks.append(
+                    FormattedBlock(
+                        block_type=BlockType.NARRATION,
+                        text=label,
+                        color=NARRATOR_COLOR,
+                        bold=True,
+                        indent_level=0,
+                        source_line=line_num,
+                        source_type=source_type,
+                    )
+                )
                 current_speaker = None
                 continue
 
             # Other source labels open a new container
             if in_source_block:
-                blocks.append(FormattedBlock(
-                    block_type=BlockType.SOURCE_LABEL_CLOSE,
-                    text="",
+                blocks.append(
+                    FormattedBlock(
+                        block_type=BlockType.SOURCE_LABEL_CLOSE,
+                        text="",
+                        source_line=line_num,
+                    )
+                )
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.SOURCE_LABEL_OPEN,
+                    text=label,
+                    source_type=source_type,
+                    bold=True,
+                    is_centered=True,
                     source_line=line_num,
-                ))
-            blocks.append(FormattedBlock(
-                block_type=BlockType.SOURCE_LABEL_OPEN,
-                text=label,
-                source_type=source_type,
-                bold=True,
-                is_centered=True,
-                source_line=line_num,
-            ))
+                )
+            )
             in_source_block = True
             current_speaker = None
             continue
@@ -1179,11 +1264,13 @@ def _format_mixed_media(
         narrative_m = RE_NARRATIVE_LABEL.match(line)
         if narrative_m:
             if in_source_block:
-                blocks.append(FormattedBlock(
-                    block_type=BlockType.SOURCE_LABEL_CLOSE,
-                    text="",
-                    source_line=line_num,
-                ))
+                blocks.append(
+                    FormattedBlock(
+                        block_type=BlockType.SOURCE_LABEL_CLOSE,
+                        text="",
+                        source_line=line_num,
+                    )
+                )
                 in_source_block = False
             block = FormattedBlock(
                 block_type=BlockType.SECTION_HEADER,
@@ -1203,14 +1290,16 @@ def _format_mixed_media(
         # Markdown sound cue: **[TEXT]**
         m = RE_SOUND_CUE.match(line)
         if m and toggles.sound_cues:
-            blocks.append(FormattedBlock(
-                block_type=BlockType.SOUND_CUE,
-                text=f"[{m.group(1)}]",
-                color=SOUND_CUE_COLOR,
-                is_centered=True,
-                font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
-                source_line=line_num,
-            ))
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.SOUND_CUE,
+                    text=f"[{m.group(1)}]",
+                    color=SOUND_CUE_COLOR,
+                    is_centered=True,
+                    font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
+                    source_line=line_num,
+                )
+            )
             continue
         elif m and not toggles.sound_cues:
             continue
@@ -1218,14 +1307,16 @@ def _format_mixed_media(
         # Plain-text sound cue
         m = RE_PLAIN_SOUND_CUE.match(line)
         if m and toggles.sound_cues:
-            blocks.append(FormattedBlock(
-                block_type=BlockType.SOUND_CUE,
-                text=line,
-                color=SOUND_CUE_COLOR,
-                is_centered=True,
-                font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
-                source_line=line_num,
-            ))
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.SOUND_CUE,
+                    text=line,
+                    color=SOUND_CUE_COLOR,
+                    is_centered=True,
+                    font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
+                    source_line=line_num,
+                )
+            )
             continue
         elif m and not toggles.sound_cues:
             continue
@@ -1233,16 +1324,18 @@ def _format_mixed_media(
         # Stage direction (markdown italic parenthetical)
         m = RE_STAGE_DIRECTION_PAREN.match(line)
         if m and toggles.stage_directions:
-            blocks.append(FormattedBlock(
-                block_type=BlockType.STAGE_DIRECTION,
-                text=f"({m.group(1)})",
-                color=STAGE_DIRECTION_COLOR,
-                italic=True,
-                indent_level=1,
-                font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
-                source_line=line_num,
-                speaker=current_speaker,
-            ))
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.STAGE_DIRECTION,
+                    text=f"({m.group(1)})",
+                    color=STAGE_DIRECTION_COLOR,
+                    italic=True,
+                    indent_level=1,
+                    font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
+                    source_line=line_num,
+                    speaker=current_speaker,
+                )
+            )
             continue
         elif m and not toggles.stage_directions:
             continue
@@ -1250,16 +1343,18 @@ def _format_mixed_media(
         # Stage direction (markdown italic bracketed)
         m = RE_STAGE_DIRECTION_BRACKET.match(line)
         if m and toggles.stage_directions:
-            blocks.append(FormattedBlock(
-                block_type=BlockType.STAGE_DIRECTION,
-                text=f"[{m.group(1)}]",
-                color=STAGE_DIRECTION_COLOR,
-                italic=True,
-                indent_level=1,
-                font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
-                source_line=line_num,
-                speaker=current_speaker,
-            ))
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.STAGE_DIRECTION,
+                    text=f"[{m.group(1)}]",
+                    color=STAGE_DIRECTION_COLOR,
+                    italic=True,
+                    indent_level=1,
+                    font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
+                    source_line=line_num,
+                    speaker=current_speaker,
+                )
+            )
             continue
         elif m and not toggles.stage_directions:
             continue
@@ -1267,16 +1362,18 @@ def _format_mixed_media(
         # Plain-text stage direction
         m = RE_PLAIN_STAGE_DIRECTION.match(line)
         if m and toggles.stage_directions:
-            blocks.append(FormattedBlock(
-                block_type=BlockType.STAGE_DIRECTION,
-                text=line,
-                color=STAGE_DIRECTION_COLOR,
-                italic=True,
-                indent_level=1,
-                font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
-                source_line=line_num,
-                speaker=current_speaker,
-            ))
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.STAGE_DIRECTION,
+                    text=line,
+                    color=STAGE_DIRECTION_COLOR,
+                    italic=True,
+                    indent_level=1,
+                    font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
+                    source_line=line_num,
+                    speaker=current_speaker,
+                )
+            )
             continue
         elif m and not toggles.stage_directions:
             continue
@@ -1290,24 +1387,28 @@ def _format_mixed_media(
             char_color = _get_character_color(canonical_name, color_map, toggles)
             current_speaker = canonical_name
 
-            blocks.append(FormattedBlock(
-                block_type=BlockType.CHARACTER_NAME,
-                text=f"{canonical_name}:",
-                color=char_color,
-                bold=True,
-                keep_with_next=True,
-                source_line=line_num,
-                speaker=canonical_name,
-            ))
-            if remainder:
-                blocks.append(FormattedBlock(
-                    block_type=BlockType.DIALOGUE,
-                    text=_strip_all_md(remainder),
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.CHARACTER_NAME,
+                    text=f"{canonical_name}:",
                     color=char_color,
-                    indent_level=1,
+                    bold=True,
+                    keep_with_next=True,
                     source_line=line_num,
                     speaker=canonical_name,
-                ))
+                )
+            )
+            if remainder:
+                blocks.append(
+                    FormattedBlock(
+                        block_type=BlockType.DIALOGUE,
+                        text=_strip_all_md(remainder),
+                        color=char_color,
+                        indent_level=1,
+                        source_line=line_num,
+                        speaker=canonical_name,
+                    )
+                )
             continue
 
         # Plain character name: NAME: (only known characters)
@@ -1320,38 +1421,44 @@ def _format_mixed_media(
                 char_color = _get_character_color(canonical_name, color_map, toggles)
                 current_speaker = canonical_name
 
-                blocks.append(FormattedBlock(
-                    block_type=BlockType.CHARACTER_NAME,
-                    text=f"{canonical_name}:",
-                    color=char_color,
-                    bold=True,
-                    keep_with_next=True,
-                    source_line=line_num,
-                    speaker=canonical_name,
-                ))
-                if remainder:
-                    blocks.append(FormattedBlock(
-                        block_type=BlockType.DIALOGUE,
-                        text=_strip_all_md(remainder),
+                blocks.append(
+                    FormattedBlock(
+                        block_type=BlockType.CHARACTER_NAME,
+                        text=f"{canonical_name}:",
                         color=char_color,
-                        indent_level=1,
+                        bold=True,
+                        keep_with_next=True,
                         source_line=line_num,
                         speaker=canonical_name,
-                    ))
+                    )
+                )
+                if remainder:
+                    blocks.append(
+                        FormattedBlock(
+                            block_type=BlockType.DIALOGUE,
+                            text=_strip_all_md(remainder),
+                            color=char_color,
+                            indent_level=1,
+                            source_line=line_num,
+                            speaker=canonical_name,
+                        )
+                    )
                 continue
 
         # Default: dialogue or narration
         cleaned = _strip_all_md(line)
         if current_speaker:
             char_color = _get_character_color(current_speaker, color_map, toggles)
-            blocks.append(FormattedBlock(
-                block_type=BlockType.DIALOGUE,
-                text=cleaned,
-                color=char_color,
-                indent_level=1,
-                source_line=line_num,
-                speaker=current_speaker,
-            ))
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.DIALOGUE,
+                    text=cleaned,
+                    color=char_color,
+                    indent_level=1,
+                    source_line=line_num,
+                    speaker=current_speaker,
+                )
+            )
         else:
             block = _make_narrator_block(line, toggles, source_line=line_num)
             if in_source_block:
@@ -1360,10 +1467,12 @@ def _format_mixed_media(
 
     # Close any open source block
     if in_source_block:
-        blocks.append(FormattedBlock(
-            block_type=BlockType.SOURCE_LABEL_CLOSE,
-            text="",
-        ))
+        blocks.append(
+            FormattedBlock(
+                block_type=BlockType.SOURCE_LABEL_CLOSE,
+                text="",
+            )
+        )
 
     return blocks
 
@@ -1371,6 +1480,7 @@ def _format_mixed_media(
 # ---------------------------------------------------------------------------
 # Title page and character legend
 # ---------------------------------------------------------------------------
+
 
 def _build_title_page(
     title: str,
@@ -1382,76 +1492,102 @@ def _build_title_page(
     blocks: list[FormattedBlock] = []
 
     # Title
-    blocks.append(FormattedBlock(
-        block_type=BlockType.SECTION_DIVIDER,
-        text="",
-    ))
-    blocks.append(FormattedBlock(
-        block_type=BlockType.BLANK_LINE,
-        text="",
-    ))
-    blocks.append(FormattedBlock(
-        block_type=BlockType.TITLE_PAGE_TITLE,
-        text=title,
-        bold=True,
-        is_centered=True,
-        font_size_override=(toggles.font_size + 6) if toggles.font_size else 22,
-    ))
-    blocks.append(FormattedBlock(
-        block_type=BlockType.BLANK_LINE,
-        text="",
-    ))
-    blocks.append(FormattedBlock(
-        block_type=BlockType.SECTION_DIVIDER,
-        text="",
-    ))
-    blocks.append(FormattedBlock(
-        block_type=BlockType.BLANK_LINE,
-        text="",
-    ))
+    blocks.append(
+        FormattedBlock(
+            block_type=BlockType.SECTION_DIVIDER,
+            text="",
+        )
+    )
+    blocks.append(
+        FormattedBlock(
+            block_type=BlockType.BLANK_LINE,
+            text="",
+        )
+    )
+    blocks.append(
+        FormattedBlock(
+            block_type=BlockType.TITLE_PAGE_TITLE,
+            text=title,
+            bold=True,
+            is_centered=True,
+            font_size_override=(toggles.font_size + 6) if toggles.font_size else 22,
+        )
+    )
+    blocks.append(
+        FormattedBlock(
+            block_type=BlockType.BLANK_LINE,
+            text="",
+        )
+    )
+    blocks.append(
+        FormattedBlock(
+            block_type=BlockType.SECTION_DIVIDER,
+            text="",
+        )
+    )
+    blocks.append(
+        FormattedBlock(
+            block_type=BlockType.BLANK_LINE,
+            text="",
+        )
+    )
 
     # Character list
     if preflight.characters:
-        blocks.append(FormattedBlock(
-            block_type=BlockType.TITLE_PAGE_INFO,
-            text="Characters:",
-            bold=True,
-            indent_level=1,
-        ))
+        blocks.append(
+            FormattedBlock(
+                block_type=BlockType.TITLE_PAGE_INFO,
+                text="Characters:",
+                bold=True,
+                indent_level=1,
+            )
+        )
         for char in preflight.characters:
             color = color_map.get(char.name, NARRATOR_COLOR)
-            blocks.append(FormattedBlock(
-                block_type=BlockType.TITLE_PAGE_INFO,
-                text=f"  {char.name}",
-                color=color,
-                indent_level=1,
-            ))
-        blocks.append(FormattedBlock(
-            block_type=BlockType.BLANK_LINE,
-            text="",
-        ))
+            blocks.append(
+                FormattedBlock(
+                    block_type=BlockType.TITLE_PAGE_INFO,
+                    text=f"  {char.name}",
+                    color=color,
+                    indent_level=1,
+                )
+            )
+        blocks.append(
+            FormattedBlock(
+                block_type=BlockType.BLANK_LINE,
+                text="",
+            )
+        )
 
     # Archetype info
-    blocks.append(FormattedBlock(
-        block_type=BlockType.TITLE_PAGE_INFO,
-        text=f"Script type: {preflight.archetype.value.replace('_', ' ').title()}",
-        indent_level=1,
-    ))
+    blocks.append(
+        FormattedBlock(
+            block_type=BlockType.TITLE_PAGE_INFO,
+            text=f"Script type: {preflight.archetype.value.replace('_', ' ').title()}",
+            indent_level=1,
+        )
+    )
 
-    blocks.append(FormattedBlock(
-        block_type=BlockType.BLANK_LINE,
-        text="",
-    ))
-    blocks.append(FormattedBlock(
-        block_type=BlockType.SECTION_DIVIDER,
-        text="",
-    ))
+    blocks.append(
+        FormattedBlock(
+            block_type=BlockType.BLANK_LINE,
+            text="",
+        )
+    )
+    blocks.append(
+        FormattedBlock(
+            block_type=BlockType.SECTION_DIVIDER,
+            text="",
+        )
+    )
 
     # Page break after title page
-    blocks.append(FormattedBlock(
-        block_type=BlockType.PAGE_BREAK,
-        text="",
-    ))
+    blocks.append(
+        FormattedBlock(
+            block_type=BlockType.PAGE_BREAK,
+            text="",
+        )
+    )
 
     return blocks
 
@@ -1463,26 +1599,32 @@ def _build_character_legend(
     """Build character legend blocks."""
     blocks: list[FormattedBlock] = []
 
-    blocks.append(FormattedBlock(
-        block_type=BlockType.CHARACTER_LEGEND_HEADER,
-        text="CHARACTER LEGEND",
-        bold=True,
-        is_centered=True,
-    ))
-    blocks.append(FormattedBlock(
-        block_type=BlockType.BLANK_LINE,
-        text="",
-    ))
+    blocks.append(
+        FormattedBlock(
+            block_type=BlockType.CHARACTER_LEGEND_HEADER,
+            text="CHARACTER LEGEND",
+            bold=True,
+            is_centered=True,
+        )
+    )
+    blocks.append(
+        FormattedBlock(
+            block_type=BlockType.BLANK_LINE,
+            text="",
+        )
+    )
 
     # Narrator first
     if preflight.has_narrator:
-        blocks.append(FormattedBlock(
-            block_type=BlockType.CHARACTER_LEGEND_ENTRY,
-            text="Narrator",
-            color=NARRATOR_COLOR,
-            bold=True,
-            indent_level=1,
-        ))
+        blocks.append(
+            FormattedBlock(
+                block_type=BlockType.CHARACTER_LEGEND_ENTRY,
+                text="Narrator",
+                color=NARRATOR_COLOR,
+                bold=True,
+                indent_level=1,
+            )
+        )
 
     # Other characters sorted by line count
     sorted_chars = sorted(preflight.characters, key=lambda c: c.line_count, reverse=True)
@@ -1490,26 +1632,34 @@ def _build_character_legend(
         if char.name.strip().lower() in {"narrator", "the narrator"}:
             continue
         color = color_map.get(char.name, NARRATOR_COLOR)
-        blocks.append(FormattedBlock(
-            block_type=BlockType.CHARACTER_LEGEND_ENTRY,
-            text=f"{char.name} ({char.line_count} lines)",
-            color=color,
-            bold=True,
-            indent_level=1,
-        ))
+        blocks.append(
+            FormattedBlock(
+                block_type=BlockType.CHARACTER_LEGEND_ENTRY,
+                text=f"{char.name} ({char.line_count} lines)",
+                color=color,
+                bold=True,
+                indent_level=1,
+            )
+        )
 
-    blocks.append(FormattedBlock(
-        block_type=BlockType.BLANK_LINE,
-        text="",
-    ))
-    blocks.append(FormattedBlock(
-        block_type=BlockType.SECTION_DIVIDER,
-        text="",
-    ))
-    blocks.append(FormattedBlock(
-        block_type=BlockType.BLANK_LINE,
-        text="",
-    ))
+    blocks.append(
+        FormattedBlock(
+            block_type=BlockType.BLANK_LINE,
+            text="",
+        )
+    )
+    blocks.append(
+        FormattedBlock(
+            block_type=BlockType.SECTION_DIVIDER,
+            text="",
+        )
+    )
+    blocks.append(
+        FormattedBlock(
+            block_type=BlockType.BLANK_LINE,
+            text="",
+        )
+    )
 
     return blocks
 
@@ -1540,13 +1690,13 @@ def _insert_breathing_marks(text: str) -> str:
         return text
 
     # After ". " (sentence boundary) — but not abbreviations like "Mr. "
-    text = re.sub(r'([.!?])\s+(?=[A-Z])', r'\1 [breath] ', text)
+    text = re.sub(r"([.!?])\s+(?=[A-Z])", r"\1 [breath] ", text)
 
     # After "; " or ": " (clause boundary)
-    text = re.sub(r'([;:])\s+', r'\1 [breath] ', text)
+    text = re.sub(r"([;:])\s+", r"\1 [breath] ", text)
 
     # After em-dash followed by more text
-    text = re.sub(r'\u2014\s*(?=\S)', '\u2014 [breath] ', text)
+    text = re.sub(r"\u2014\s*(?=\S)", "\u2014 [breath] ", text)
 
     return text
 
@@ -1558,14 +1708,14 @@ def _convert_pause_notation(text: str) -> str:
     - em-dash -> ## (long pause)
     """
     # Three dots (or unicode ellipsis) -> short pause marker
-    text = text.replace('\u2026', ' # ')  # unicode ellipsis
-    text = re.sub(r'\.{3}', ' # ', text)
+    text = text.replace("\u2026", " # ")  # unicode ellipsis
+    text = re.sub(r"\.{3}", " # ", text)
 
     # Em-dash -> long pause marker
-    text = text.replace('\u2014', ' ## ')
+    text = text.replace("\u2014", " ## ")
 
     # Clean up double spaces
-    text = re.sub(r'  +', ' ', text)
+    text = re.sub(r"  +", " ", text)
 
     return text
 
@@ -1630,7 +1780,6 @@ def _batch_by_voice(
     gets a header block with the character name and batch number.
     Characters are ordered by line count (most lines first).
     """
-    from collections import OrderedDict
 
     # Collect speaker groups: {speaker_name: [blocks]}
     # Preserve insertion order by line count (most lines first)
@@ -1657,8 +1806,10 @@ def _batch_by_voice(
 
         # Skip legend/title page blocks — they go before batches
         if bt in (
-            BlockType.TITLE_PAGE_TITLE, BlockType.TITLE_PAGE_INFO,
-            BlockType.CHARACTER_LEGEND_HEADER, BlockType.CHARACTER_LEGEND_ENTRY,
+            BlockType.TITLE_PAGE_TITLE,
+            BlockType.TITLE_PAGE_INFO,
+            BlockType.CHARACTER_LEGEND_HEADER,
+            BlockType.CHARACTER_LEGEND_ENTRY,
         ):
             continue
 
@@ -1751,10 +1902,7 @@ def _batch_by_voice(
     batch_num = 0
 
     # Include any speakers not in the preflight character list
-    extra_speakers = [
-        s for s in speaker_groups
-        if s != narration_key and s not in speaker_order
-    ]
+    extra_speakers = [s for s in speaker_groups if s != narration_key and s not in speaker_order]
 
     for speaker_name in speaker_order + extra_speakers:
         runs = speaker_groups.get(speaker_name, [])
@@ -1765,14 +1913,16 @@ def _batch_by_voice(
         char_color = color_map.get(speaker_name, NARRATOR_COLOR)
 
         # Batch header
-        result.append(FormattedBlock(
-            block_type=BlockType.VOICE_BATCH_HEADER,
-            text=f"BATCH {batch_num}: {speaker_name.upper()}",
-            color=char_color,
-            bold=True,
-            is_centered=True,
-            page_break_before=batch_num > 1,
-        ))
+        result.append(
+            FormattedBlock(
+                block_type=BlockType.VOICE_BATCH_HEADER,
+                text=f"BATCH {batch_num}: {speaker_name.upper()}",
+                color=char_color,
+                bold=True,
+                is_centered=True,
+                page_break_before=batch_num > 1,
+            )
+        )
         result.append(FormattedBlock(block_type=BlockType.BLANK_LINE, text=""))
         result.append(FormattedBlock(block_type=BlockType.SECTION_DIVIDER, text=""))
         result.append(FormattedBlock(block_type=BlockType.BLANK_LINE, text=""))
@@ -1789,14 +1939,16 @@ def _batch_by_voice(
     narrator_runs = speaker_groups.get(narration_key, [])
     if narrator_runs:
         batch_num += 1
-        result.append(FormattedBlock(
-            block_type=BlockType.VOICE_BATCH_HEADER,
-            text=f"BATCH {batch_num}: NARRATOR",
-            color=NARRATOR_COLOR,
-            bold=True,
-            is_centered=True,
-            page_break_before=batch_num > 1,
-        ))
+        result.append(
+            FormattedBlock(
+                block_type=BlockType.VOICE_BATCH_HEADER,
+                text=f"BATCH {batch_num}: NARRATOR",
+                color=NARRATOR_COLOR,
+                bold=True,
+                is_centered=True,
+                page_break_before=batch_num > 1,
+            )
+        )
         result.append(FormattedBlock(block_type=BlockType.BLANK_LINE, text=""))
         result.append(FormattedBlock(block_type=BlockType.SECTION_DIVIDER, text=""))
         result.append(FormattedBlock(block_type=BlockType.BLANK_LINE, text=""))
@@ -1841,9 +1993,7 @@ def format_script(
     color_map = assign_colors(preflight.characters, preflight.has_narrator)
 
     # Dispatch to archetype formatter
-    formatter_fn = _ARCHETYPE_FORMATTERS.get(
-        preflight.archetype, _format_multi_voice_drama
-    )
+    formatter_fn = _ARCHETYPE_FORMATTERS.get(preflight.archetype, _format_multi_voice_drama)
     content_blocks = formatter_fn(numbered_lines, preflight, toggles, color_map)
 
     # Build final output
@@ -1853,6 +2003,7 @@ def format_script(
     if toggles.title_page:
         # Derive title from filename
         import os
+
         title = os.path.splitext(os.path.basename(filename))[0]
         title = title.replace("_", " ").replace("-", " ")
         result.extend(_build_title_page(title, preflight, color_map, toggles))
@@ -1875,6 +2026,7 @@ def format_script(
     # Cold-read line breaks
     if toggles.cold_read_breaks:
         from .cold_read import apply_cold_read_breaks
+
         apply_cold_read_breaks(result, toggles)
 
     # Voice batch mode — reorder by speaker

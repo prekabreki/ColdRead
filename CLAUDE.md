@@ -30,7 +30,7 @@ pyinstaller ColdRead.spec
 # Windows → dist/ColdRead.exe   ·   Linux/macOS → dist/ColdRead
 ```
 
-There is no linter config or CI — don't invent commands for them. For integration validation beyond the unit tests, run the CLI against the sample scripts in `vo_format/samples/`.
+Lint + format: `ruff check vo_format/ tests/` and `ruff format --check vo_format/ tests/`. CI runs both plus pytest on every push/PR. For integration validation beyond the unit tests, run the CLI against the sample scripts in `vo_format/samples/`.
 
 ### Useful CLI flags
 

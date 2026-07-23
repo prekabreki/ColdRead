@@ -40,10 +40,7 @@ def _block_types(blocks):
 
 
 def test_multi_voice_drama_recognizes_bold_character_names():
-    text = normalize_text(
-        "**COGSWORTH:** Testing, one two three.\n\n"
-        "**THAELRIN:** I hear you, small one.\n"
-    )
+    text = normalize_text("**COGSWORTH:** Testing, one two three.\n\n**THAELRIN:** I hear you, small one.\n")
     preflight = _empty_preflight(
         Archetype.MULTI_VOICE_DRAMA,
         characters=[
@@ -66,8 +63,7 @@ def test_multi_voice_drama_recognizes_bold_character_names():
 
 def test_continuous_prose_produces_no_character_blocks():
     text = normalize_text(
-        "As he sleeps, the fourteen-year-old Sora is haunted by a dream.\n\n"
-        "It speaks in riddles and warnings.\n"
+        "As he sleeps, the fourteen-year-old Sora is haunted by a dream.\n\nIt speaks in riddles and warnings.\n"
     )
     preflight = _empty_preflight(Archetype.CONTINUOUS_PROSE, has_narrator=False)
     toggles = resolve_toggles(Archetype.CONTINUOUS_PROSE)
@@ -76,24 +72,15 @@ def test_continuous_prose_produces_no_character_blocks():
     types = _block_types(blocks)
     assert BlockType.CHARACTER_NAME not in types
     # Should produce prose/narration blocks with the actual text.
-    assert any(
-        b.block_type in (BlockType.PROSE, BlockType.NARRATION)
-        for b in blocks
-    )
+    assert any(b.block_type in (BlockType.PROSE, BlockType.NARRATION) for b in blocks)
 
 
 def test_metadata_blocks_are_stripped_when_toggle_on():
     from vo_format.models import MetadataBlock
 
-    text = normalize_text(
-        "Line one is real.\n"
-        "YOUTUBE TITLE: Strip me.\n"
-        "Line three is real.\n"
-    )
+    text = normalize_text("Line one is real.\nYOUTUBE TITLE: Strip me.\nLine three is real.\n")
     preflight = _empty_preflight(Archetype.SINGLE_NARRATOR)
-    preflight.metadata_blocks = [
-        MetadataBlock(type="youtube_title", start_line=2, end_line=2)
-    ]
+    preflight.metadata_blocks = [MetadataBlock(type="youtube_title", start_line=2, end_line=2)]
     toggles = resolve_toggles(Archetype.SINGLE_NARRATOR)
     assert toggles.strip_metadata is True
 

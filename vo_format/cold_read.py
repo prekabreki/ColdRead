@@ -9,11 +9,11 @@ from __future__ import annotations
 import re
 
 from .models import (
+    WRAPPABLE_INDENT_UNITS,
     BlockType,
     FormattedBlock,
     FormatToggles,
     MarginPreset,
-    WRAPPABLE_INDENT_UNITS,
 )
 
 # Block types eligible for cold-read wrapping
@@ -35,16 +35,19 @@ _BREAK_RULES: list[tuple[re.Pattern, int]] = [
     # Priority 3: sentence endings (.!? optionally followed by closing quote)
     (re.compile(r'[.!?][\u201D"\']*\s'), 3),
     # Priority 2: semicolon / colon clause boundary
-    (re.compile(r'[;:]\s'), 2),
+    (re.compile(r"[;:]\s"), 2),
     # Priority 2: em-dash (with optional space after)
-    (re.compile(r'\u2014\s?'), 2),
+    (re.compile(r"\u2014\s?"), 2),
     # Priority 1: comma
-    (re.compile(r',\s'), 1),
+    (re.compile(r",\s"), 1),
     # Priority 1: break BEFORE a conjunction word
-    (re.compile(
-        r'\s(?=(?:and|but|or|nor|yet|so|because|since|while|when|if|that|'
-        r'which|where|although|though|after|before|until|unless|however|then)\s)',
-    ), 1),
+    (
+        re.compile(
+            r"\s(?=(?:and|but|or|nor|yet|so|because|since|while|when|if|that|"
+            r"which|where|although|though|after|before|until|unless|however|then)\s)",
+        ),
+        1,
+    ),
 ]
 
 # Safety factor: compute fewer chars than the theoretical max to
@@ -55,6 +58,7 @@ _SAFETY_FACTOR = 0.82
 # ------------------------------------------------------------------
 # Width computation
 # ------------------------------------------------------------------
+
 
 def _compute_max_chars(
     block_type: BlockType,
@@ -74,10 +78,10 @@ def _compute_max_chars(
     page_width = 8.5  # US Letter inches
 
     margin_total = {
-        MarginPreset.NORMAL: 2.0,   # 1.0 + 1.0
-        MarginPreset.WIDE:   3.0,   # 1.5 + 1.5
-        MarginPreset.EXTRA:  4.0,   # 2.0 + 2.0
-        MarginPreset.NARROW: 1.6,   # 0.8 + 0.8
+        MarginPreset.NORMAL: 2.0,  # 1.0 + 1.0
+        MarginPreset.WIDE: 3.0,  # 1.5 + 1.5
+        MarginPreset.EXTRA: 4.0,  # 2.0 + 2.0
+        MarginPreset.NARROW: 1.6,  # 0.8 + 0.8
     }.get(margins, 3.0)
 
     # Style default indent + any block-level extra indent
@@ -94,6 +98,7 @@ def _compute_max_chars(
 # ------------------------------------------------------------------
 # Break-point search
 # ------------------------------------------------------------------
+
 
 def _find_best_break(text: str, max_pos: int, min_pos: int = 0) -> int | None:
     """Find the best break position in *text* at or before *max_pos*.
@@ -112,7 +117,7 @@ def _find_best_break(text: str, max_pos: int, min_pos: int = 0) -> int | None:
     # Search window — don't look further back than 40% of max_pos
     # to avoid creating very short lines.
     window_start = max(min_pos, max_pos - int(max_pos * 0.4))
-    window = text[window_start:max_pos + 1]
+    window = text[window_start : max_pos + 1]
 
     best_pos: int | None = None
     best_priority = -1
@@ -122,9 +127,7 @@ def _find_best_break(text: str, max_pos: int, min_pos: int = 0) -> int | None:
             abs_pos = window_start + m.end()
             if min_pos < abs_pos <= max_pos:
                 # Prefer higher priority; among equals prefer later position
-                if (priority > best_priority
-                        or (priority == best_priority
-                            and (best_pos is None or abs_pos > best_pos))):
+                if priority > best_priority or (priority == best_priority and (best_pos is None or abs_pos > best_pos)):
                     best_pos = abs_pos
                     best_priority = priority
 
@@ -140,6 +143,7 @@ def _find_best_break(text: str, max_pos: int, min_pos: int = 0) -> int | None:
 # ------------------------------------------------------------------
 # Core wrapping
 # ------------------------------------------------------------------
+
 
 def wrap_cold_read(text: str, max_chars: int) -> str:
     """Wrap *text* at natural phrase boundaries for cold-read optimization.
@@ -174,11 +178,6 @@ def wrap_cold_read(text: str, max_chars: int) -> str:
     # --- Balanced split ---
     # Figure out how many lines we need, then aim for equal lengths.
     num_lines = math.ceil(len(text) / max_chars)
-    target = len(text) // num_lines
-
-    # Allow the break finder some flexibility around the target
-    min_target = int(target * 0.65)
-    max_target = min(int(target * 1.35), max_chars)
 
     lines: list[str] = []
     remaining = text
@@ -235,6 +234,7 @@ def _fix_orphans(lines: list[str]) -> None:
 # ------------------------------------------------------------------
 # Public API
 # ------------------------------------------------------------------
+
 
 def apply_cold_read_breaks(
     blocks: list[FormattedBlock],

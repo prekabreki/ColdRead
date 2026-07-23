@@ -15,11 +15,13 @@ from __future__ import annotations
 
 import os
 import shutil
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
-from .models import DiagnosticReport, FormattedBlock, PreflightResult
-from . import preflight as _api
 from . import claude_code_backend as _cli
+from . import preflight as _api
+
+if TYPE_CHECKING:
+    from .models import DiagnosticReport, FormattedBlock, PreflightResult
 
 Backend = Literal["api", "claude-code"]
 
@@ -35,17 +37,13 @@ def resolve_backend(requested: str | None) -> Backend:
     """
     if requested:
         if requested not in VALID_BACKENDS:
-            raise ValueError(
-                f"Unknown backend '{requested}'. Choices: {', '.join(VALID_BACKENDS)}"
-            )
+            raise ValueError(f"Unknown backend '{requested}'. Choices: {', '.join(VALID_BACKENDS)}")
         return requested  # type: ignore[return-value]
 
     env = os.environ.get("VO_FORMAT_BACKEND")
     if env:
         if env not in VALID_BACKENDS:
-            raise ValueError(
-                f"VO_FORMAT_BACKEND='{env}' is invalid. Choices: {', '.join(VALID_BACKENDS)}"
-            )
+            raise ValueError(f"VO_FORMAT_BACKEND='{env}' is invalid. Choices: {', '.join(VALID_BACKENDS)}")
         return env  # type: ignore[return-value]
 
     if os.environ.get("ANTHROPIC_API_KEY"):
@@ -101,9 +99,7 @@ def run_diagnostic(
 ) -> DiagnosticReport:
     chosen = resolve_backend(backend)
     if chosen == "claude-code":
-        return _cli.run_diagnostic(
-            script_text, preflight_result, formatted_blocks, api_key=api_key, model=model
-        )
+        return _cli.run_diagnostic(script_text, preflight_result, formatted_blocks, api_key=api_key, model=model)
     return _api.run_diagnostic(
         script_text,
         preflight_result,

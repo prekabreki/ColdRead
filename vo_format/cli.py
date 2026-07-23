@@ -6,14 +6,18 @@ import argparse
 import json
 import os
 import sys
-from dataclasses import asdict
 
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
-from rich.table import Table
-from rich.text import Text
 
+from .backend import (
+    VALID_BACKENDS,
+    resolve_backend,
+    run_diagnostic,
+    run_preflight,
+    run_pronunciation,
+)
 from .colors import assign_colors
 from .formatter import format_script
 from .models import (
@@ -26,16 +30,12 @@ from .models import (
 )
 from .parser import extract_text, normalize_text
 from .pdf_writer import generate_pdf
-from .backend import VALID_BACKENDS, resolve_backend, run_diagnostic, run_preflight, run_pronunciation
 from .preflight import PreflightError
 from .preview import render_preview
 from .toggles import (
-    ARCHETYPE_DEFAULTS,
-    TOGGLE_DEFINITIONS,
     resolve_toggles,
     toggles_to_display,
 )
-
 
 console = Console()
 
@@ -57,7 +57,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to the input script (.txt, .md, .pdf, .docx)",
     )
     parser.add_argument(
-        "-o", "--output",
+        "-o",
+        "--output",
         help="Output PDF path (default: <script_name>_formatted.pdf)",
     )
     parser.add_argument(
@@ -107,32 +108,29 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     # Toggle flags
-    _add_bool_flag(parser, "color-characters", "color_characters",
-                   "Assign distinct colors to each character's lines")
-    _add_bool_flag(parser, "section-breaks", "section_breaks",
-                   "Insert page breaks between sections")
-    _add_bool_flag(parser, "stage-directions", "stage_directions",
-                   "Style stage directions (grey italic)")
-    _add_bool_flag(parser, "sound-cues", "sound_cues",
-                   "Style sound/tape cues distinctly")
-    _add_bool_flag(parser, "source-labels", "source_labels",
-                   "Style document/media source labels as blocks")
-    _add_bool_flag(parser, "strip-metadata", "strip_metadata",
-                   "Remove production notes, YouTube titles, etc.")
-    _add_bool_flag(parser, "title-page", "title_page",
-                   "Generate a title page with script info")
-    _add_bool_flag(parser, "character-legend", "character_legend",
-                   "Add color-coded character legend")
-    _add_bool_flag(parser, "breathing-marks", "breathing_marks",
-                   "Insert [breath] markers at natural pause points")
-    _add_bool_flag(parser, "pause-notation", "pause_notation",
-                   "Convert ... and em-dashes to visual pause markers")
-    _add_bool_flag(parser, "pronunciation-guide", "pronunciation_guide",
-                   "Add AI-generated phonetic hints for flagged words (extra API call)")
-    _add_bool_flag(parser, "voice-batch", "voice_batch",
-                   "Reorder script by character for batch recording sessions")
-    _add_bool_flag(parser, "cold-read-breaks", "cold_read_breaks",
-                   "Break lines at natural phrase boundaries for easier cold reading")
+    _add_bool_flag(parser, "color-characters", "color_characters", "Assign distinct colors to each character's lines")
+    _add_bool_flag(parser, "section-breaks", "section_breaks", "Insert page breaks between sections")
+    _add_bool_flag(parser, "stage-directions", "stage_directions", "Style stage directions (grey italic)")
+    _add_bool_flag(parser, "sound-cues", "sound_cues", "Style sound/tape cues distinctly")
+    _add_bool_flag(parser, "source-labels", "source_labels", "Style document/media source labels as blocks")
+    _add_bool_flag(parser, "strip-metadata", "strip_metadata", "Remove production notes, YouTube titles, etc.")
+    _add_bool_flag(parser, "title-page", "title_page", "Generate a title page with script info")
+    _add_bool_flag(parser, "character-legend", "character_legend", "Add color-coded character legend")
+    _add_bool_flag(parser, "breathing-marks", "breathing_marks", "Insert [breath] markers at natural pause points")
+    _add_bool_flag(parser, "pause-notation", "pause_notation", "Convert ... and em-dashes to visual pause markers")
+    _add_bool_flag(
+        parser,
+        "pronunciation-guide",
+        "pronunciation_guide",
+        "Add AI-generated phonetic hints for flagged words (extra API call)",
+    )
+    _add_bool_flag(parser, "voice-batch", "voice_batch", "Reorder script by character for batch recording sessions")
+    _add_bool_flag(
+        parser,
+        "cold-read-breaks",
+        "cold_read_breaks",
+        "Break lines at natural phrase boundaries for easier cold reading",
+    )
 
     parser.add_argument(
         "--narrator-style",
@@ -202,10 +200,12 @@ def _display_preflight(
 ) -> None:
     """Display preflight results using Rich."""
     console.print()
-    console.print(Panel.fit(
-        "[bold]ColdRead[/bold]",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel.fit(
+            "[bold]ColdRead[/bold]",
+            border_style="cyan",
+        )
+    )
     console.print()
 
     # Archetype
@@ -315,13 +315,12 @@ def _edit_toggles(toggles: FormatToggles) -> FormatToggles:
         name = item["name"]
         current = item["value"]
 
-        if item["type"] == bool:
+        if item["type"] is bool:
             # Flip boolean
             new_val = not current
             setattr(toggles, name, new_val)
-            state = "ON" if new_val else "OFF"
             old_state = "ON" if current else "OFF"
-            console.print(f"    {item['display_name']}: {old_state} -> {state}")
+            console.print(f"    {item['display_name']}: {old_state} -> {'ON' if new_val else 'OFF'}")
         elif "choices" in item:
             # Choice selection
             choices_str = "/".join(str(c) for c in item["choices"])
@@ -330,9 +329,9 @@ def _edit_toggles(toggles: FormatToggles) -> FormatToggles:
                 default=str(current),
             )
             # Coerce to correct type
-            if item["type"] == int:
+            if item["type"] is int:
                 new_val = int(new_val)
-            elif item["type"] == float:
+            elif item["type"] is float:
                 new_val = float(new_val)
 
             # Handle enum conversion
@@ -350,9 +349,9 @@ def _edit_toggles(toggles: FormatToggles) -> FormatToggles:
                 f"    {item['display_name']}",
                 default=str(current),
             )
-            if item["type"] == float:
+            if item["type"] is float:
                 new_val = float(new_val)
-            elif item["type"] == int:
+            elif item["type"] is int:
                 new_val = int(new_val)
             setattr(toggles, name, new_val)
             console.print(f"    {item['display_name']}: {current} -> {new_val}")
@@ -368,10 +367,12 @@ def _edit_toggles(toggles: FormatToggles) -> FormatToggles:
 def _display_diagnostic(report) -> None:
     """Display diagnostic report."""
     console.print()
-    console.print(Panel.fit(
-        "[bold]Diagnostic Report[/bold]",
-        border_style="yellow",
-    ))
+    console.print(
+        Panel.fit(
+            "[bold]Diagnostic Report[/bold]",
+            border_style="yellow",
+        )
+    )
     console.print()
 
     if report.summary:
@@ -399,14 +400,16 @@ def _display_diagnostic(report) -> None:
             console.print(f"    - {p}")
         console.print()
 
-    if not any([
-        report.misclassified_lines,
-        report.missed_characters,
-        report.missed_stage_directions,
-        report.missed_sound_cues,
-        report.unstripped_metadata,
-        report.unhandled_patterns,
-    ]):
+    if not any(
+        [
+            report.misclassified_lines,
+            report.missed_characters,
+            report.missed_stage_directions,
+            report.missed_sound_cues,
+            report.unstripped_metadata,
+            report.unhandled_patterns,
+        ]
+    ):
         console.print("  [green]No issues found.[/green]")
         console.print()
 
@@ -419,6 +422,7 @@ def _display_diagnostic(report) -> None:
 def _list_samples() -> None:
     """Print the bundled sample scripts and their full paths."""
     from importlib.resources import files
+
     sample_dir = files("vo_format") / "samples"
     try:
         names = sorted(p.name for p in sample_dir.iterdir() if p.name.endswith(".md"))
@@ -476,7 +480,7 @@ def main() -> None:
             )
             console.print(" [green]done[/green]")
         except PreflightError as e:
-            console.print(f" [red]failed[/red]")
+            console.print(" [red]failed[/red]")
             console.print(f"  [red]{e}[/red]")
             console.print("  Falling back to defaults.")
     else:
@@ -528,11 +532,7 @@ def main() -> None:
     # AUTO logic: if preflight detected pronunciation flags and user didn't
     # explicitly set the toggle, auto-enable it
     cli_pronunciation = getattr(args, "pronunciation_guide", None)
-    if (
-        cli_pronunciation is None
-        and preflight.pronunciation_flags
-        and not args.no_preflight
-    ):
+    if cli_pronunciation is None and preflight.pronunciation_flags and not args.no_preflight:
         toggles.pronunciation_guide = True
 
     if toggles.pronunciation_guide and preflight.pronunciation_flags:
@@ -552,7 +552,10 @@ def main() -> None:
     # Step 5: Format
     console.print("  Formatting...", end="")
     blocks = format_script(
-        normalized, preflight, toggles, filename,
+        normalized,
+        preflight,
+        toggles,
+        filename,
         pronunciation_guide=pronunciation_guide or None,
     )
     console.print(f" [green]done[/green] ({len(blocks)} blocks)")
@@ -574,13 +577,13 @@ def main() -> None:
             sys.exit(0)
 
     # Step 6: Generate PDF
-    console.print(f"  Generating PDF...", end="")
+    console.print("  Generating PDF...", end="")
     try:
         output_path = generate_pdf(blocks, output_path, toggles)
-        console.print(f" [green]done[/green]")
+        console.print(" [green]done[/green]")
         console.print(f"\n  [bold green]Output:[/bold green] {output_path}")
     except Exception as e:
-        console.print(f" [red]failed[/red]")
+        console.print(" [red]failed[/red]")
         console.print(f"  [red]PDF generation error: {e}[/red]")
         sys.exit(1)
 
@@ -599,8 +602,7 @@ def main() -> None:
                 ],
                 "has_narrator": preflight.has_narrator,
                 "sections": [
-                    {"title": s.title, "start_line": s.start_line, "end_line": s.end_line}
-                    for s in preflight.sections
+                    {"title": s.title, "start_line": s.start_line, "end_line": s.end_line} for s in preflight.sections
                 ],
                 "metadata_blocks": [
                     {"type": m.type, "start_line": m.start_line, "end_line": m.end_line}
@@ -644,12 +646,24 @@ def main() -> None:
 def _collect_cli_overrides(args: argparse.Namespace) -> dict:
     """Collect explicitly-set CLI toggle values (exclude None/unset)."""
     toggle_fields = [
-        "color_characters", "narrator_style", "section_breaks",
-        "stage_directions", "sound_cues", "source_labels",
-        "quoted_text_style", "strip_metadata", "title_page",
-        "character_legend", "breathing_marks", "pause_notation",
-        "pronunciation_guide", "voice_batch", "cold_read_breaks",
-        "font_size", "line_spacing", "margins",
+        "color_characters",
+        "narrator_style",
+        "section_breaks",
+        "stage_directions",
+        "sound_cues",
+        "source_labels",
+        "quoted_text_style",
+        "strip_metadata",
+        "title_page",
+        "character_legend",
+        "breathing_marks",
+        "pause_notation",
+        "pronunciation_guide",
+        "voice_batch",
+        "cold_read_breaks",
+        "font_size",
+        "line_spacing",
+        "margins",
     ]
     overrides = {}
     for field in toggle_fields:

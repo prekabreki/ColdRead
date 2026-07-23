@@ -9,7 +9,6 @@ import pytest
 from vo_format import claude_code_backend
 from vo_format.backend import VALID_BACKENDS, resolve_backend
 
-
 # ---------------------------------------------------------------------------
 # resolve_backend
 # ---------------------------------------------------------------------------

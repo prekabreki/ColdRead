@@ -25,6 +25,24 @@ import tempfile
 import time
 from typing import Any
 
+from .models import (
+    DiagnosticEntry,
+    DiagnosticReport,
+    FormattedBlock,
+    PreflightResult,
+)
+from .preflight import (
+    DIAGNOSTIC_SYSTEM_PROMPT,
+    PREFLIGHT_SYSTEM_PROMPT,
+    PRONUNCIATION_SYSTEM_PROMPT,
+    APIConnectionError,
+    APIResponseError,
+    JSONParseError,
+    PreflightError,
+    _extract_json,
+    _validate_and_build,
+)
+
 log = logging.getLogger(__name__)
 
 
@@ -46,24 +64,6 @@ def _dbg(msg: str) -> None:
             f.write(f"{datetime.datetime.now().isoformat(timespec='milliseconds')}  {msg}\n")
     except OSError:
         pass
-
-from .models import (
-    DiagnosticEntry,
-    DiagnosticReport,
-    FormattedBlock,
-    PreflightResult,
-)
-from .preflight import (
-    APIConnectionError,
-    APIResponseError,
-    DIAGNOSTIC_SYSTEM_PROMPT,
-    JSONParseError,
-    PREFLIGHT_SYSTEM_PROMPT,
-    PRONUNCIATION_SYSTEM_PROMPT,
-    PreflightError,
-    _extract_json,
-    _validate_and_build,
-)
 
 
 # ---------------------------------------------------------------------------
@@ -128,9 +128,7 @@ def _build_subprocess_env(force_api_key: bool) -> dict[str, str]:
     if force_api_key:
         env = os.environ.copy()
     else:
-        env = {
-            k: v for k, v in os.environ.items() if k not in _API_MODE_ENV_VARS_TO_STRIP
-        }
+        env = {k: v for k, v in os.environ.items() if k not in _API_MODE_ENV_VARS_TO_STRIP}
     env["PYTHONIOENCODING"] = "utf-8"
     env["PYTHONUTF8"] = "1"
     return env
@@ -185,7 +183,10 @@ def _invoke_claude_cli(
     env = _build_subprocess_env(force_api_key)
     creation_flags = _subprocess_creationflags()
     _dbg(f"  creation_flags=0x{creation_flags:08x}  env_size={len(env)}")
-    _dbg(f"  env has ANTHROPIC_API_KEY={'ANTHROPIC_API_KEY' in env}  ANTHROPIC_AUTH_TOKEN={'ANTHROPIC_AUTH_TOKEN' in env}")
+    _dbg(
+        f"  env has ANTHROPIC_API_KEY={'ANTHROPIC_API_KEY' in env}"
+        f"  ANTHROPIC_AUTH_TOKEN={'ANTHROPIC_AUTH_TOKEN' in env}"
+    )
 
     # Hybrid input path:
     #   short messages → pass directly as the -p argument
@@ -197,25 +198,27 @@ def _invoke_claude_cli(
     # headroom and cap inline messages at 24KB. stdin is always DEVNULL — the
     # pipe handshake hangs forever when the parent is a windowed PyInstaller
     # exe (no console), which is the bug this whole module exists to dodge.
-    INLINE_BUDGET_CHARS = 24_000
-    inline_path = len(user_message) <= INLINE_BUDGET_CHARS
+    _inline_budget_chars = 24_000
+    inline_path = len(user_message) <= _inline_budget_chars
 
     with tempfile.TemporaryDirectory(prefix="vo-format-claude-") as scratch:
         scratch_path = pathlib.Path(scratch)
         _dbg(f"  scratch_cwd={scratch!r}")
 
         if inline_path:
-            _dbg(f"  path=INLINE  (user_msg fits in {INLINE_BUDGET_CHARS} char budget)")
+            _dbg(f"  path=INLINE  (user_msg fits in {_inline_budget_chars} char budget)")
             mode_specific = [
-                "-p", user_message,
-                "--tools", "",
+                "-p",
+                user_message,
+                "--tools",
+                "",
             ]
         else:
             context_file = scratch_path / "context.md"
             context_file.write_text(user_message, encoding="utf-8")
             _dbg(
                 f"  path=FILE  wrote context.md ({context_file.stat().st_size} bytes; "
-                f"user_msg over {INLINE_BUDGET_CHARS}-char inline budget)"
+                f"user_msg over {_inline_budget_chars}-char inline budget)"
             )
             # --append-system-prompt-file is a real CLI flag (hidden from main
             # --help but documented in the --bare description). It loads the
@@ -234,9 +237,12 @@ def _invoke_claude_cli(
                 "fences, no narration."
             )
             mode_specific = [
-                "-p", trigger_prompt,
-                "--append-system-prompt-file", str(context_file),
-                "--tools", "",
+                "-p",
+                trigger_prompt,
+                "--append-system-prompt-file",
+                str(context_file),
+                "--tools",
+                "",
             ]
 
         # --strict-mcp-config + empty --mcp-config: block all MCP server
@@ -248,14 +254,19 @@ def _invoke_claude_cli(
         cmd = [
             claude_bin,
             "--print",
-            "--output-format", "json",
-            "--system-prompt", system_prompt,
+            "--output-format",
+            "json",
+            "--system-prompt",
+            system_prompt,
             "--no-session-persistence",
             "--disable-slash-commands",
-            "--setting-sources", "user",
+            "--setting-sources",
+            "user",
             "--strict-mcp-config",
-            "--mcp-config", '{"mcpServers":{}}',
-            "--model", chosen_model,
+            "--mcp-config",
+            '{"mcpServers":{}}',
+            "--model",
+            chosen_model,
             *mode_specific,
         ]
         _dbg(f"  cmd[0..2]={cmd[:3]!r}  argv_len={len(cmd)}")
@@ -278,9 +289,7 @@ def _invoke_claude_cli(
             )
         except subprocess.TimeoutExpired as e:
             _dbg(f"  !! TimeoutExpired after {time.monotonic() - t0:.1f}s")
-            raise APIConnectionError(
-                f"Claude CLI timed out after {timeout}s"
-            ) from e
+            raise APIConnectionError(f"Claude CLI timed out after {timeout}s") from e
         except OSError as e:
             _dbg(f"  !! OSError: {e!r}")
             raise APIConnectionError(f"Failed to launch Claude CLI: {e}") from e
@@ -316,9 +325,7 @@ def _invoke_claude_cli(
             api_status = wrapper.get("api_error_status")
             status_part = f" (api_error_status={api_status})" if api_status else ""
             raise APIResponseError(f"Claude CLI error: {msg}{status_part}")
-        raise APIResponseError(
-            f"Claude CLI exited {proc.returncode}: {stderr_tail or '<no stderr>'}"
-        )
+        raise APIResponseError(f"Claude CLI exited {proc.returncode}: {stderr_tail or '<no stderr>'}")
 
     if not stdout:
         raise JSONParseError("Claude CLI returned empty output")
@@ -338,9 +345,7 @@ def _invoke_claude_cli(
 
     result = wrapper.get("result")
     if not isinstance(result, str) or not result.strip():
-        raise JSONParseError(
-            f"Claude CLI wrapper had no 'result' string: {stdout[:300]}"
-        )
+        raise JSONParseError(f"Claude CLI wrapper had no 'result' string: {stdout[:300]}")
 
     # Snippet log so we can audit what Claude actually returned without
     # having to plumb the full response back to the GUI. Truncated to
@@ -375,19 +380,19 @@ def run_preflight(
     line_count = script_text.count("\n") + 1
 
     # Same sampling strategy as the API path so behavior matches.
-    BUDGET_CHARS = 200_000
+    _budget_chars = 200_000
     analysis_text = script_text
     truncated = False
-    if len(script_text) > BUDGET_CHARS:
+    if len(script_text) > _budget_chars:
         truncated = True
-        head = int(BUDGET_CHARS * 0.50)
-        mid = int(BUDGET_CHARS * 0.25)
-        tail = int(BUDGET_CHARS * 0.25)
+        head = int(_budget_chars * 0.50)
+        mid = int(_budget_chars * 0.25)
+        tail = int(_budget_chars * 0.25)
         middle_start = (len(script_text) - mid) // 2
         analysis_text = (
             f"{script_text[:head]}\n\n"
             f"[... {len(script_text) - head - mid - tail:,} characters omitted ...]\n\n"
-            f"{script_text[middle_start:middle_start + mid]}\n\n"
+            f"{script_text[middle_start : middle_start + mid]}\n\n"
             f"[... resuming near end of script ...]\n\n"
             f"{script_text[-tail:]}"
         )
@@ -400,7 +405,7 @@ def run_preflight(
         )
 
     user_message = (
-        f'Analyze the following voice-over script. The script is from a file '
+        f"Analyze the following voice-over script. The script is from a file "
         f'named "{filename}" and is {line_count} lines long.{truncation_note}\n\n'
         f"<script>\n{analysis_text}\n</script>"
     )
@@ -441,10 +446,7 @@ def run_pronunciation(
             unique_words.append(w)
 
     word_list = ", ".join(unique_words)
-    user_message = (
-        f"Generate phonetic pronunciations for these words from a {script_context}:\n\n"
-        f"{word_list}"
-    )
+    user_message = f"Generate phonetic pronunciations for these words from a {script_context}:\n\n{word_list}"
 
     try:
         response_text = _invoke_claude_cli(
@@ -498,14 +500,10 @@ def run_diagnostic(
 
     preflight_dict = {
         "archetype": preflight_result.archetype.value,
-        "characters": [
-            {"name": c.name, "line_count": c.line_count}
-            for c in preflight_result.characters
-        ],
+        "characters": [{"name": c.name, "line_count": c.line_count} for c in preflight_result.characters],
         "has_narrator": preflight_result.has_narrator,
         "sections": [
-            {"title": s.title, "start_line": s.start_line, "end_line": s.end_line}
-            for s in preflight_result.sections
+            {"title": s.title, "start_line": s.start_line, "end_line": s.end_line} for s in preflight_result.sections
         ],
         "metadata_blocks": [
             {"type": m.type, "start_line": m.start_line, "end_line": m.end_line}

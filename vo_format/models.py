@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
-
+from typing import Any
 
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
+
 
 class Archetype(str, Enum):
     DOCUMENT_ARCHIVE = "document_archive"
@@ -43,7 +43,7 @@ class MarginPreset(str, Enum):
 # wrapping. Units are multiples of 0.5" (one "indent step"). pdf_writer.py
 # uses this to set ParagraphStyle.leftIndent; cold_read.py uses it to compute
 # max line width. Keep them in lockstep by not hardcoding either value.
-WRAPPABLE_INDENT_UNITS: dict["BlockType", int] = {}  # populated below
+WRAPPABLE_INDENT_UNITS: dict[BlockType, int] = {}  # populated below
 
 
 class BlockType(str, Enum):
@@ -69,12 +69,14 @@ class BlockType(str, Enum):
     OUTRO = "outro"
 
 
-WRAPPABLE_INDENT_UNITS.update({
-    BlockType.DIALOGUE:    1,
-    BlockType.NARRATION:   1,
-    BlockType.QUOTED_TEXT: 2,
-    BlockType.PROSE:       0,
-})
+WRAPPABLE_INDENT_UNITS.update(
+    {
+        BlockType.DIALOGUE: 1,
+        BlockType.NARRATION: 1,
+        BlockType.QUOTED_TEXT: 2,
+        BlockType.PROSE: 0,
+    }
+)
 
 
 class LineType(str, Enum):
@@ -96,6 +98,7 @@ class LineType(str, Enum):
 # Preflight data structures
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class CharacterInfo:
     name: str
@@ -106,8 +109,8 @@ class CharacterInfo:
 @dataclass
 class SourceType:
     type: str  # broadcast, email, transmission, document_ref, etc.
-    label: Optional[str] = None
-    prefix: Optional[str] = None
+    label: str | None = None
+    prefix: str | None = None
     count: int = 0
 
 
@@ -123,7 +126,7 @@ class MetadataBlock:
     type: str  # youtube_title, runtime_estimate, voice_cast, editorial_note, etc.
     start_line: int
     end_line: int
-    text: Optional[str] = None
+    text: str | None = None
 
 
 @dataclass
@@ -151,6 +154,7 @@ class PreflightResult:
 # Toggle configuration
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class FormatToggles:
     color_characters: bool = True
@@ -177,29 +181,32 @@ class FormatToggles:
 # Formatter output
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class FormattedBlock:
     """A single renderable block for the PDF writer."""
+
     block_type: BlockType
     text: str
     color: str = "#000000"
     bold: bool = False
     italic: bool = False
     indent_level: int = 0  # 0 = flush left, 1 = one tab, 2 = two tabs
-    font_size_override: Optional[int] = None
+    font_size_override: int | None = None
     keep_with_next: bool = False
     page_break_before: bool = False
     is_centered: bool = False
-    source_line: Optional[int] = None  # line number in original script
-    match_pattern: Optional[str] = None  # regex pattern that matched (for diagnostics)
+    source_line: int | None = None  # line number in original script
+    match_pattern: str | None = None  # regex pattern that matched (for diagnostics)
     pronunciation_hints: list[str] = field(default_factory=list)  # phonetic hints for this block
-    speaker: Optional[str] = None  # character name for dialogue/stage direction blocks
-    source_type: Optional[str] = None  # "broadcast", "email", "transmission", "document_ref", etc.
+    speaker: str | None = None  # character name for dialogue/stage direction blocks
+    source_type: str | None = None  # "broadcast", "email", "transmission", "document_ref", etc.
 
 
 # ---------------------------------------------------------------------------
 # Diagnostics
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class DiagnosticEntry:

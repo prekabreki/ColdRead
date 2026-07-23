@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
-from rich.console import Console
+from typing import TYPE_CHECKING
+
 from rich.text import Text
 
 from .models import BlockType, FormattedBlock, FormatToggles, NarratorStyle
+
+if TYPE_CHECKING:
+    from rich.console import Console
 
 
 def _print_rule(console: Console, title: str = "", style: str = "dim") -> None:

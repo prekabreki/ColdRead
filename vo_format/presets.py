@@ -15,9 +15,11 @@ from .toggles import coerce_value
 # Default presets directory
 # ---------------------------------------------------------------------------
 
+
 def _default_presets_dir() -> Path:
     """Return the default directory for user presets."""
     import os
+
     env = os.environ.get("VO_FORMATTER_PRESETS_DIR")
     if env:
         return Path(env)
@@ -67,6 +69,7 @@ BUILTIN_PRESETS: dict[str, dict[str, Any]] = {
 # Serialization helpers
 # ---------------------------------------------------------------------------
 
+
 def toggles_to_dict(toggles: FormatToggles) -> dict[str, Any]:
     """Serialize a FormatToggles instance to a JSON-safe dict."""
     result: dict[str, Any] = {}
@@ -92,6 +95,7 @@ def dict_to_toggles(data: dict[str, Any]) -> FormatToggles:
 # File helpers
 # ---------------------------------------------------------------------------
 
+
 def _sanitize_name(name: str) -> str:
     """Turn a human-readable preset name into a safe filename stem."""
     return re.sub(r"[^\w\-]+", "_", name.strip()).strip("_").lower()
@@ -100,6 +104,7 @@ def _sanitize_name(name: str) -> str:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def save_preset(
     name: str,

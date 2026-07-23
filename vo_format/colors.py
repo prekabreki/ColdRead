@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from .models import CharacterInfo
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .models import CharacterInfo
 
 # 8-color high-contrast palette from spec (optimized for print grayscale)
 PALETTE: list[tuple[str, str]] = [

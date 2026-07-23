@@ -10,8 +10,6 @@ from typing import Any
 
 import anthropic
 
-log = logging.getLogger(__name__)
-
 from .models import (
     Archetype,
     CharacterInfo,
@@ -24,6 +22,8 @@ from .models import (
     Section,
     SourceType,
 )
+
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Exceptions
@@ -217,8 +217,7 @@ def _get_api_key(cli_key: str | None = None) -> str:
     if env_key:
         return env_key
     raise PreflightError(
-        "No API key found. Set ANTHROPIC_API_KEY environment variable "
-        "or pass --api-key on the command line."
+        "No API key found. Set ANTHROPIC_API_KEY environment variable or pass --api-key on the command line."
     )
 
 
@@ -261,10 +260,7 @@ def _validate_and_build(data: dict[str, Any]) -> PreflightResult:
     try:
         archetype = Archetype(archetype_str)
     except ValueError:
-        raise ValidationError(
-            f"Unknown archetype '{archetype_str}'. "
-            f"Expected one of: {[a.value for a in Archetype]}"
-        )
+        raise ValidationError(f"Unknown archetype '{archetype_str}'. Expected one of: {[a.value for a in Archetype]}")
 
     # Build characters
     characters = []
@@ -308,8 +304,7 @@ def _validate_and_build(data: dict[str, Any]) -> PreflightResult:
         end_raw = m.get("end_line")
         if end_raw is None:
             metadata_warnings.append(
-                f"Metadata block at line {start} ({m.get('type', '?')}) "
-                f"is missing end_line; treating as a single line."
+                f"Metadata block at line {start} ({m.get('type', '?')}) is missing end_line; treating as a single line."
             )
             end = start
         else:
@@ -382,19 +377,19 @@ def run_preflight(
     # prompt and response within the 200K context window.
     # For structural analysis, beginning (40%) + middle (20%) + end (20%) is
     # more than enough to detect archetype, characters, cues, etc.
-    BUDGET_CHARS = 200_000  # ~50K tokens
+    _budget_chars = 200_000  # ~50K tokens
     analysis_text = script_text
     truncated = False
-    if len(script_text) > BUDGET_CHARS:
+    if len(script_text) > _budget_chars:
         truncated = True
-        head = int(BUDGET_CHARS * 0.50)   # first 50% of budget
-        mid  = int(BUDGET_CHARS * 0.25)   # middle 25%
-        tail = int(BUDGET_CHARS * 0.25)   # last 25%
+        head = int(_budget_chars * 0.50)  # first 50% of budget
+        mid = int(_budget_chars * 0.25)  # middle 25%
+        tail = int(_budget_chars * 0.25)  # last 25%
         middle_start = (len(script_text) - mid) // 2
         analysis_text = (
             f"{script_text[:head]}\n\n"
             f"[... {len(script_text) - head - mid - tail:,} characters omitted ...]\n\n"
-            f"{script_text[middle_start:middle_start + mid]}\n\n"
+            f"{script_text[middle_start : middle_start + mid]}\n\n"
             f"[... resuming near end of script ...]\n\n"
             f"{script_text[-tail:]}"
         )
@@ -407,7 +402,7 @@ def run_preflight(
         )
 
     user_message = (
-        f'Analyze the following voice-over script. The script is from a file '
+        f"Analyze the following voice-over script. The script is from a file "
         f'named "{filename}" and is {line_count} lines long.{truncation_note}\n\n'
         f"<script>\n{analysis_text}\n</script>"
     )
@@ -473,14 +468,10 @@ def run_diagnostic(
     # Serialize preflight for context
     preflight_dict = {
         "archetype": preflight_result.archetype.value,
-        "characters": [
-            {"name": c.name, "line_count": c.line_count}
-            for c in preflight_result.characters
-        ],
+        "characters": [{"name": c.name, "line_count": c.line_count} for c in preflight_result.characters],
         "has_narrator": preflight_result.has_narrator,
         "sections": [
-            {"title": s.title, "start_line": s.start_line, "end_line": s.end_line}
-            for s in preflight_result.sections
+            {"title": s.title, "start_line": s.start_line, "end_line": s.end_line} for s in preflight_result.sections
         ],
         "metadata_blocks": [
             {"type": m.type, "start_line": m.start_line, "end_line": m.end_line}
@@ -595,10 +586,7 @@ def run_pronunciation(
             unique_words.append(w)
 
     word_list = ", ".join(unique_words)
-    user_message = (
-        f"Generate phonetic pronunciations for these words from a {script_context}:\n\n"
-        f"{word_list}"
-    )
+    user_message = f"Generate phonetic pronunciations for these words from a {script_context}:\n\n{word_list}"
 
     try:
         client = anthropic.Anthropic(api_key=key)

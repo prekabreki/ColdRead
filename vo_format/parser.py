@@ -6,7 +6,7 @@ import os
 import re
 
 # Upper bounds to prevent OOM from adversarial or malformed input files.
-MAX_FILE_BYTES = 50 * 1024 * 1024   # 50 MB on disk
+MAX_FILE_BYTES = 50 * 1024 * 1024  # 50 MB on disk
 MAX_PDF_PAGES = 2_000
 MAX_DOCX_PARAGRAPHS = 200_000
 
@@ -14,10 +14,7 @@ MAX_DOCX_PARAGRAPHS = 200_000
 def _check_file_size(file_path: str) -> None:
     size = os.path.getsize(file_path)
     if size > MAX_FILE_BYTES:
-        raise ValueError(
-            f"Script file is too large ({size:,} bytes). "
-            f"Limit is {MAX_FILE_BYTES:,} bytes."
-        )
+        raise ValueError(f"Script file is too large ({size:,} bytes). Limit is {MAX_FILE_BYTES:,} bytes.")
 
 
 def _extract_pdf(file_path: str) -> str:
@@ -25,17 +22,12 @@ def _extract_pdf(file_path: str) -> str:
     try:
         import pymupdf
     except ImportError:
-        raise ImportError(
-            "pymupdf is required for PDF input. Install it with: pip install pymupdf"
-        )
+        raise ImportError("pymupdf is required for PDF input. Install it with: pip install pymupdf")
 
     doc = pymupdf.open(file_path)
     try:
         if doc.page_count > MAX_PDF_PAGES:
-            raise ValueError(
-                f"PDF has too many pages ({doc.page_count}). "
-                f"Limit is {MAX_PDF_PAGES}."
-            )
+            raise ValueError(f"PDF has too many pages ({doc.page_count}). Limit is {MAX_PDF_PAGES}.")
         pages = [page.get_text() for page in doc]
     finally:
         doc.close()
@@ -47,18 +39,13 @@ def _extract_docx(file_path: str) -> str:
     try:
         from docx import Document
     except ImportError:
-        raise ImportError(
-            "python-docx is required for .docx input. "
-            "Install it with: pip install python-docx"
-        )
+        raise ImportError("python-docx is required for .docx input. Install it with: pip install python-docx")
 
     doc = Document(file_path)
     paragraphs: list[str] = []
     for i, p in enumerate(doc.paragraphs):
         if i >= MAX_DOCX_PARAGRAPHS:
-            raise ValueError(
-                f"DOCX has too many paragraphs (>{MAX_DOCX_PARAGRAPHS})."
-            )
+            raise ValueError(f"DOCX has too many paragraphs (>{MAX_DOCX_PARAGRAPHS}).")
         paragraphs.append(p.text)
     return "\n".join(paragraphs)
 
@@ -92,20 +79,17 @@ def extract_text(file_path: str) -> tuple[str, str]:
         # Try UTF-8 first, fall back to latin-1
         for encoding in ("utf-8-sig", "utf-8", "latin-1"):
             try:
-                with open(file_path, "r", encoding=encoding) as f:
+                with open(file_path, encoding=encoding) as f:
                     raw_text = f.read()
                 break
             except UnicodeDecodeError:
                 continue
         else:
             # Last resort: replace errors
-            with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+            with open(file_path, encoding="utf-8", errors="replace") as f:
                 raw_text = f.read()
     else:
-        raise ValueError(
-            f"Unsupported file type '{ext}'. "
-            "Supported formats: .txt, .md, .pdf, .docx"
-        )
+        raise ValueError(f"Unsupported file type '{ext}'. Supported formats: .txt, .md, .pdf, .docx")
 
     if not raw_text.strip():
         raise ValueError(f"Script file is empty: {file_path}")

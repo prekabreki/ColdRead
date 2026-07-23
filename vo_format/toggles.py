@@ -145,7 +145,7 @@ TOGGLE_DEFINITIONS: list[dict[str, Any]] = [
         "type": str,
         "default": "wide",
         "choices": ["normal", "wide", "extra"],
-        "description": "Margin preset (normal=1\", wide=1.5\", extra=2\")",
+        "description": 'Margin preset (normal=1", wide=1.5", extra=2")',
         "display_name": "Margins",
     },
 ]
@@ -204,6 +204,7 @@ ARCHETYPE_DEFAULTS: dict[Archetype, dict[str, Any]] = {
 # ---------------------------------------------------------------------------
 # Toggle resolution
 # ---------------------------------------------------------------------------
+
 
 def coerce_value(name: str, value: Any) -> Any:
     """Coerce a raw value to the appropriate type for a toggle field."""

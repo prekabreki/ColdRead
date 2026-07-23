@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import logging
 import os
+import re as _re
 
-from reportlab.lib.colors import Color, HexColor
+from reportlab.lib.colors import HexColor
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle
@@ -22,11 +23,11 @@ from reportlab.platypus import (
 )
 
 from .models import (
+    WRAPPABLE_INDENT_UNITS,
     BlockType,
     FormattedBlock,
     FormatToggles,
     MarginPreset,
-    WRAPPABLE_INDENT_UNITS,
 )
 
 log = logging.getLogger(__name__)
@@ -41,6 +42,7 @@ _FONT_FAMILY = "Courier"  # fallback
 _FONT_BOLD = "Courier-Bold"
 _FONT_ITALIC = "Courier-Oblique"
 _FONT_BOLD_ITALIC = "Courier-BoldOblique"
+
 
 def _font_search_dirs() -> list:
     """Font directories to scan, across OSes. Honours a VO_FONT_DIRS env override
@@ -61,6 +63,7 @@ def _font_search_dirs() -> list:
         os.path.expanduser("~/Library/Fonts"),
     ]
     return dirs
+
 
 # TTF families to try, in priority order. Courier New (the VO-script standard) wins
 # where present; Liberation Mono is metric-compatible with Courier New and ships on most
@@ -126,12 +129,12 @@ def _register_fonts() -> None:
             return
         except Exception as e:
             log.warning(
-                "Failed to register TTF family (%s); trying next candidate.", e,
+                "Failed to register TTF family (%s); trying next candidate.",
+                e,
             )
 
-    log.info(
-        "No Courier New / Liberation Mono TTFs found; falling back to Type-1 Courier."
-    )
+    log.info("No Courier New / Liberation Mono TTFs found; falling back to Type-1 Courier.")
+
 
 _register_fonts()
 
@@ -183,7 +186,7 @@ class HorizontalRule(Flowable):
         self.thickness = thickness
         self.rule_color = HexColor(color)
 
-    def wrap(self, availWidth, availHeight):
+    def wrap(self, availWidth, availHeight):  # noqa: N803
         self.rule_width = availWidth
         return (availWidth, self.thickness + 6)
 
@@ -202,7 +205,7 @@ class ColorSwatch(Flowable):
         self.swatch_color = HexColor(color)
         self.size = size
 
-    def wrap(self, availWidth, availHeight):
+    def wrap(self, availWidth, availHeight):  # noqa: N803
         return (self.size, self.size)
 
     def draw(self):
@@ -222,8 +225,6 @@ def _xml_escape(text: str) -> str:
     text = text.replace(">", "&gt;")
     return text
 
-
-import re as _re
 
 # Bold: **text** -> <b>text</b>  (must be matched before italic)
 _RE_MD_BOLD = _re.compile(r"\*\*(.+?)\*\*")
@@ -604,10 +605,7 @@ def generate_pdf(
             next_block = blocks[i + 1]
             next_flowables = _block_to_flowables(next_block, styles, toggles)
             # Only use KeepTogether if neither is a page break
-            if (
-                block.block_type != BlockType.PAGE_BREAK
-                and next_block.block_type != BlockType.PAGE_BREAK
-            ):
+            if block.block_type != BlockType.PAGE_BREAK and next_block.block_type != BlockType.PAGE_BREAK:
                 flowables.append(KeepTogether(block_flowables + next_flowables))
                 i += 2
                 continue

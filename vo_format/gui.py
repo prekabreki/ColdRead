@@ -5,18 +5,17 @@ from __future__ import annotations
 import dataclasses
 import logging
 import os
-import sys
 import tempfile
 import threading
 import tkinter as tk
 from tkinter import filedialog
 
-log = logging.getLogger(__name__)
-
 import customtkinter
 import fitz  # PyMuPDF
 from PIL import Image
 
+from .backend import VALID_BACKENDS, resolve_backend, run_preflight, run_pronunciation
+from .cache import PreflightCache
 from .colors import assign_colors
 from .formatter import format_script
 from .models import (
@@ -31,24 +30,26 @@ from .models import (
 )
 from .parser import extract_text, normalize_text
 from .pdf_writer import generate_pdf
-from .cache import PreflightCache
-from .backend import VALID_BACKENDS, resolve_backend, run_preflight, run_pronunciation
 from .preflight import PreflightError
 from .presets import BUILTIN_PRESETS, delete_preset, list_presets, load_preset, save_preset
 from .toggles import TOGGLE_DEFINITIONS, resolve_toggles
 
 # Optional dependencies — graceful fallback
 try:
-    from tkinterdnd2 import TkinterDnD, DND_FILES
+    from tkinterdnd2 import DND_FILES, TkinterDnD
+
     _HAS_DND = True
 except ImportError:
     _HAS_DND = False
 
 try:
     from CTkToolTip import CTkToolTip
+
     _HAS_TOOLTIP = True
 except ImportError:
     _HAS_TOOLTIP = False
+
+log = logging.getLogger(__name__)
 
 customtkinter.set_appearance_mode("dark")
 customtkinter.set_default_color_theme("blue")
@@ -69,8 +70,8 @@ _SUPPORTED_EXTENSIONS = {".txt", ".md", ".pdf", ".docx"}
 _PREFLIGHT_ONLY_TOGGLES = {"color_characters", "character_legend", "pronunciation_guide"}
 
 RENDER_DPI = 144
-MAX_PREVIEW_WIDTH = 900   # cap page display width so pages stay readable on maximize
-_LETTER_WIDTH_PT = 612    # US Letter width in points — used to express zoom as a %
+MAX_PREVIEW_WIDTH = 900  # cap page display width so pages stay readable on maximize
+_LETTER_WIDTH_PT = 612  # US Letter width in points — used to express zoom as a %
 
 
 def _find_api_key() -> str | None:
@@ -150,8 +151,11 @@ class VOFormatterApp(_AppBase):
 
         # --- Layout: horizontal paned window ---
         self._paned = tk.PanedWindow(
-            self, orient=tk.HORIZONTAL, sashwidth=6,
-            bg="#2b2b2b", sashrelief=tk.FLAT,
+            self,
+            orient=tk.HORIZONTAL,
+            sashwidth=6,
+            bg="#2b2b2b",
+            sashrelief=tk.FLAT,
         )
         self._paned.pack(fill="both", expand=True)
 
@@ -186,7 +190,8 @@ class VOFormatterApp(_AppBase):
 
     def _build_input_section(self, row: int) -> int:
         label = customtkinter.CTkLabel(
-            self.main_frame, text="INPUT",
+            self.main_frame,
+            text="INPUT",
             font=customtkinter.CTkFont(size=13, weight="bold"),
         )
         label.grid(row=row, column=0, sticky="w", pady=(0, 4))
@@ -197,8 +202,10 @@ class VOFormatterApp(_AppBase):
         mode_frame.grid(row=row, column=0, sticky="w", pady=(0, 6))
         self._mode_var = customtkinter.StringVar(value="Single File")
         self._mode_seg = customtkinter.CTkSegmentedButton(
-            mode_frame, values=["Single File", "Batch Folder"],
-            variable=self._mode_var, command=self._on_mode_changed,
+            mode_frame,
+            values=["Single File", "Batch Folder"],
+            variable=self._mode_var,
+            command=self._on_mode_changed,
         )
         self._mode_seg.pack(side="left")
         row += 1
@@ -213,7 +220,10 @@ class VOFormatterApp(_AppBase):
         self.input_entry.configure(state="disabled")
 
         self.browse_btn = customtkinter.CTkButton(
-            frame, text="Browse", width=80, command=self._browse_input,
+            frame,
+            text="Browse",
+            width=80,
+            command=self._browse_input,
         )
         self.browse_btn.grid(row=0, column=1)
 
@@ -222,7 +232,8 @@ class VOFormatterApp(_AppBase):
 
     def _build_preflight_section(self, row: int) -> int:
         label = customtkinter.CTkLabel(
-            self.main_frame, text="PREFLIGHT",
+            self.main_frame,
+            text="PREFLIGHT",
             font=customtkinter.CTkFont(size=13, weight="bold"),
         )
         label.grid(row=row, column=0, sticky="w", pady=(8, 4))
@@ -232,15 +243,22 @@ class VOFormatterApp(_AppBase):
         btn_frame.grid(row=row, column=0, sticky="ew", pady=(0, 4))
 
         self.analyze_btn = customtkinter.CTkButton(
-            btn_frame, text="Analyze Script", width=140, command=self._run_preflight,
+            btn_frame,
+            text="Analyze Script",
+            width=140,
+            command=self._run_preflight,
         )
         self.analyze_btn.pack(side="left")
         self.analyze_btn.configure(state="disabled")
 
         self.skip_preflight_var = customtkinter.StringVar(value="off")
         self.skip_preflight_cb = customtkinter.CTkSwitch(
-            btn_frame, text="Skip", variable=self.skip_preflight_var,
-            onvalue="on", offvalue="off", width=60,
+            btn_frame,
+            text="Skip",
+            variable=self.skip_preflight_var,
+            onvalue="on",
+            offvalue="off",
+            width=60,
             command=self._on_skip_preflight_toggle,
         )
         self.skip_preflight_cb.pack(side="left", padx=(12, 0))
@@ -253,22 +271,22 @@ class VOFormatterApp(_AppBase):
         backend_label = customtkinter.CTkLabel(btn_frame, text="Backend:")
         backend_label.pack(side="left", padx=(12, 4))
         if _HAS_TOOLTIP:
-            self._tooltips.append(CTkToolTip(
-                backend_label,
-                message=(
-                    "Analysis backend.\n"
-                    "API: direct Anthropic API call (needs ANTHROPIC_API_KEY, "
-                    "uses credits).\n"
-                    "Claude Code: shells out to local 'claude' CLI in --print "
-                    "mode (uses your Claude.ai subscription, no API credit "
-                    "required)."
-                ),
-                delay=0.5,
-            ))
+            self._tooltips.append(
+                CTkToolTip(
+                    backend_label,
+                    message=(
+                        "Analysis backend.\n"
+                        "API: direct Anthropic API call (needs ANTHROPIC_API_KEY, "
+                        "uses credits).\n"
+                        "Claude Code: shells out to local 'claude' CLI in --print "
+                        "mode (uses your Claude.ai subscription, no API credit "
+                        "required)."
+                    ),
+                    delay=0.5,
+                )
+            )
 
-        self._backend_var = customtkinter.StringVar(
-            value=_BACKEND_LABELS[default_backend]
-        )
+        self._backend_var = customtkinter.StringVar(value=_BACKEND_LABELS[default_backend])
         self._backend_selector = customtkinter.CTkSegmentedButton(
             btn_frame,
             values=[_BACKEND_LABELS[b] for b in VALID_BACKENDS],
@@ -278,12 +296,16 @@ class VOFormatterApp(_AppBase):
         self._backend_selector.pack(side="left")
 
         self.preflight_status = customtkinter.CTkLabel(
-            btn_frame, text="  No file loaded", text_color="gray",
+            btn_frame,
+            text="  No file loaded",
+            text_color="gray",
         )
         self.preflight_status.pack(side="left", padx=(8, 0))
 
         self.preflight_progress = customtkinter.CTkProgressBar(
-            btn_frame, width=120, mode="indeterminate",
+            btn_frame,
+            width=120,
+            mode="indeterminate",
         )
         self.preflight_progress.pack(side="right", padx=(8, 0))
         self.preflight_progress.pack_forget()
@@ -291,7 +313,8 @@ class VOFormatterApp(_AppBase):
         row += 1
 
         self.preflight_box = customtkinter.CTkTextbox(
-            self.main_frame, height=110,
+            self.main_frame,
+            height=110,
             font=customtkinter.CTkFont(family="Courier New", size=12),
         )
         self.preflight_box.grid(row=row, column=0, sticky="ew", pady=(0, 12))
@@ -306,7 +329,8 @@ class VOFormatterApp(_AppBase):
         outer.columnconfigure(0, weight=1)
 
         label = customtkinter.CTkLabel(
-            outer, text="FORMAT TOGGLES",
+            outer,
+            text="FORMAT TOGGLES",
             font=customtkinter.CTkFont(size=13, weight="bold"),
         )
         label.grid(row=0, column=0, sticky="w", padx=12, pady=(8, 4), columnspan=2)
@@ -329,14 +353,19 @@ class VOFormatterApp(_AppBase):
         self._preset_combo.pack(side="left", padx=(0, 8))
 
         self._save_preset_btn = customtkinter.CTkButton(
-            preset_frame, text="Save", width=60,
+            preset_frame,
+            text="Save",
+            width=60,
             command=self._save_preset,
         )
         self._save_preset_btn.pack(side="left", padx=(0, 4))
 
         self._delete_preset_btn = customtkinter.CTkButton(
-            preset_frame, text="Delete", width=60,
-            fg_color="#DC2626", hover_color="#B91C1C",
+            preset_frame,
+            text="Delete",
+            width=60,
+            fg_color="#DC2626",
+            hover_color="#B91C1C",
             command=self._delete_preset,
         )
         self._delete_preset_btn.pack(side="left")
@@ -360,8 +389,11 @@ class VOFormatterApp(_AppBase):
                 display_text += " *"
 
             switch = customtkinter.CTkSwitch(
-                bool_frame, text=display_text,
-                variable=var, onvalue="on", offvalue="off",
+                bool_frame,
+                text=display_text,
+                variable=var,
+                onvalue="on",
+                offvalue="off",
                 command=self._on_toggle_changed,
             )
             switch.grid(row=bool_row, column=bool_col, sticky="w", padx=(0, 20), pady=3)
@@ -383,8 +415,10 @@ class VOFormatterApp(_AppBase):
 
         # Preflight note
         note = customtkinter.CTkLabel(
-            bool_frame, text="* Requires preflight — disabled without analysis",
-            text_color="#FACC15", font=customtkinter.CTkFont(size=11),
+            bool_frame,
+            text="* Requires preflight — disabled without analysis",
+            text_color="#FACC15",
+            font=customtkinter.CTkFont(size=11),
         )
         note.grid(row=bool_row + 1, column=0, columnspan=2, sticky="w", pady=(4, 0))
         self._preflight_note = note
@@ -407,7 +441,9 @@ class VOFormatterApp(_AppBase):
             values = [str(c) for c in defn["choices"]]
             var = customtkinter.StringVar(value=str(defn["default"]))
             seg = customtkinter.CTkSegmentedButton(
-                choice_frame, values=values, variable=var,
+                choice_frame,
+                values=values,
+                variable=var,
                 command=lambda val: self._on_toggle_changed(),
             )
             seg.grid(row=choice_row, column=1, sticky="w", pady=4)
@@ -444,8 +480,12 @@ class VOFormatterApp(_AppBase):
                 self._on_toggle_changed()
 
             slider = customtkinter.CTkSlider(
-                slider_frame, from_=1.0, to=3.0, number_of_steps=8,
-                variable=var, command=_on_slider,
+                slider_frame,
+                from_=1.0,
+                to=3.0,
+                number_of_steps=8,
+                variable=var,
+                command=_on_slider,
             )
             slider.grid(row=0, column=1, sticky="ew")
             self.toggle_widgets[defn["name"]] = slider
@@ -460,7 +500,8 @@ class VOFormatterApp(_AppBase):
 
     def _build_intro_outro_section(self, row: int) -> int:
         label = customtkinter.CTkLabel(
-            self.main_frame, text="INTRO / OUTRO",
+            self.main_frame,
+            text="INTRO / OUTRO",
             font=customtkinter.CTkFont(size=13, weight="bold"),
         )
         label.grid(row=row, column=0, sticky="w", pady=(0, 4))
@@ -469,7 +510,8 @@ class VOFormatterApp(_AppBase):
         hint = customtkinter.CTkLabel(
             self.main_frame,
             text="Optional. Prepended/appended to the script. Blank lines separate paragraphs.",
-            text_color="gray", font=customtkinter.CTkFont(size=11),
+            text_color="gray",
+            font=customtkinter.CTkFont(size=11),
         )
         hint.grid(row=row, column=0, sticky="w", pady=(0, 4))
         row += 1
@@ -479,7 +521,8 @@ class VOFormatterApp(_AppBase):
         row += 1
 
         self.intro_box = customtkinter.CTkTextbox(
-            self.main_frame, height=80,
+            self.main_frame,
+            height=80,
             font=customtkinter.CTkFont(family="Courier New", size=12),
         )
         self.intro_box.grid(row=row, column=0, sticky="ew", pady=(0, 8))
@@ -490,7 +533,8 @@ class VOFormatterApp(_AppBase):
         row += 1
 
         self.outro_box = customtkinter.CTkTextbox(
-            self.main_frame, height=80,
+            self.main_frame,
+            height=80,
             font=customtkinter.CTkFont(family="Courier New", size=12),
         )
         self.outro_box.grid(row=row, column=0, sticky="ew", pady=(0, 12))
@@ -573,17 +617,15 @@ class VOFormatterApp(_AppBase):
         # trailing separator blocks too.
         if last_frontmatter_idx >= 0:
             insert_idx = last_frontmatter_idx + 1
-            while (
-                insert_idx < len(blocks)
-                and blocks[insert_idx].block_type in frontmatter_types
-            ):
+            while insert_idx < len(blocks) and blocks[insert_idx].block_type in frontmatter_types:
                 insert_idx += 1
 
         return blocks[:insert_idx] + intro_blocks + blocks[insert_idx:] + outro_blocks
 
     def _build_output_section(self, row: int) -> int:
         label = customtkinter.CTkLabel(
-            self.main_frame, text="OUTPUT",
+            self.main_frame,
+            text="OUTPUT",
             font=customtkinter.CTkFont(size=13, weight="bold"),
         )
         label.grid(row=row, column=0, sticky="w", pady=(0, 4))
@@ -597,7 +639,10 @@ class VOFormatterApp(_AppBase):
         self.output_entry.grid(row=0, column=0, sticky="ew", padx=(0, 8))
 
         self.output_browse_btn = customtkinter.CTkButton(
-            frame, text="Browse", width=80, command=self._browse_output,
+            frame,
+            text="Browse",
+            width=80,
+            command=self._browse_output,
         )
         self.output_browse_btn.grid(row=0, column=1)
 
@@ -605,8 +650,11 @@ class VOFormatterApp(_AppBase):
 
         self._export_batch_var = customtkinter.StringVar(value="off")
         self._export_batch_switch = customtkinter.CTkSwitch(
-            self.main_frame, text="Also export voice batch PDF  (_formatted_batched.pdf)",
-            variable=self._export_batch_var, onvalue="on", offvalue="off",
+            self.main_frame,
+            text="Also export voice batch PDF  (_formatted_batched.pdf)",
+            variable=self._export_batch_var,
+            onvalue="on",
+            offvalue="off",
         )
         self._export_batch_switch.grid(row=row, column=0, sticky="w", pady=(0, 8))
         row += 1
@@ -616,14 +664,18 @@ class VOFormatterApp(_AppBase):
         pc_frame.grid(row=row, column=0, sticky="ew", pady=(0, 12))
 
         self._page_estimate_label = customtkinter.CTkLabel(
-            pc_frame, text="Estimated pages: --",
-            text_color="gray", font=customtkinter.CTkFont(size=12),
+            pc_frame,
+            text="Estimated pages: --",
+            text_color="gray",
+            font=customtkinter.CTkFont(size=12),
         )
         self._page_estimate_label.pack(side="left", padx=(0, 20))
 
         self._page_actual_label = customtkinter.CTkLabel(
-            pc_frame, text="Formatted pages: --",
-            text_color="gray", font=customtkinter.CTkFont(size=12),
+            pc_frame,
+            text="Formatted pages: --",
+            text_color="gray",
+            font=customtkinter.CTkFont(size=12),
         )
         self._page_actual_label.pack(side="left")
 
@@ -635,14 +687,21 @@ class VOFormatterApp(_AppBase):
         frame.grid(row=row, column=0, sticky="ew", pady=(0, 12))
 
         self.preview_btn = customtkinter.CTkButton(
-            frame, text="Preview", width=120, command=self._run_preview,
-            fg_color="#555555", hover_color="#666666",
+            frame,
+            text="Preview",
+            width=120,
+            command=self._run_preview,
+            fg_color="#555555",
+            hover_color="#666666",
         )
         self.preview_btn.pack(side="left", padx=(0, 12))
         self.preview_btn.configure(state="disabled")
 
         self.generate_btn = customtkinter.CTkButton(
-            frame, text="Generate PDF", width=140, command=self._run_generate,
+            frame,
+            text="Generate PDF",
+            width=140,
+            command=self._run_generate,
         )
         self.generate_btn.pack(side="left")
         self.generate_btn.configure(state="disabled")
@@ -652,7 +711,8 @@ class VOFormatterApp(_AppBase):
 
     def _build_log_section(self, row: int) -> int:
         self.log_box = customtkinter.CTkTextbox(
-            self.main_frame, height=100,
+            self.main_frame,
+            height=100,
             font=customtkinter.CTkFont(family="Courier New", size=11),
         )
         self.log_box.grid(row=row, column=0, sticky="ew", pady=(0, 4))
@@ -688,16 +748,24 @@ class VOFormatterApp(_AppBase):
         zoom_frame.pack(side="left", padx=(16, 0))
 
         self._zoom_fit_btn = customtkinter.CTkButton(
-            zoom_frame, text="Fit", width=44, height=26,
+            zoom_frame,
+            text="Fit",
+            width=44,
+            height=26,
             command=self._on_zoom_fit,
-            fg_color="#444444", hover_color="#555555",
+            fg_color="#444444",
+            hover_color="#555555",
         )
         self._zoom_fit_btn.pack(side="left")
 
         self._zoom_out_btn = customtkinter.CTkButton(
-            zoom_frame, text="−", width=28, height=26,
+            zoom_frame,
+            text="−",
+            width=28,
+            height=26,
             command=self._on_zoom_out,
-            fg_color="#444444", hover_color="#555555",
+            fg_color="#444444",
+            hover_color="#555555",
         )
         self._zoom_out_btn.pack(side="left", padx=(4, 0))
 
@@ -705,14 +773,20 @@ class VOFormatterApp(_AppBase):
         self._zoom_pct_label.pack(side="left", padx=(2, 2))
 
         self._zoom_in_btn = customtkinter.CTkButton(
-            zoom_frame, text="+", width=28, height=26,
+            zoom_frame,
+            text="+",
+            width=28,
+            height=26,
             command=self._on_zoom_in,
-            fg_color="#444444", hover_color="#555555",
+            fg_color="#444444",
+            hover_color="#555555",
         )
         self._zoom_in_btn.pack(side="left")
 
         self._preview_status = customtkinter.CTkLabel(
-            header, text="", text_color="gray",
+            header,
+            text="",
+            text_color="gray",
         )
         self._preview_status.pack(side="right")
 
@@ -739,7 +813,10 @@ class VOFormatterApp(_AppBase):
         page_nav.pack(fill="x", padx=10, pady=(4, 4))
 
         self._prev_btn = customtkinter.CTkButton(
-            page_nav, text="< Prev", width=70, command=self._prev_page,
+            page_nav,
+            text="< Prev",
+            width=70,
+            command=self._prev_page,
         )
         self._prev_btn.pack(side="left")
 
@@ -747,12 +824,16 @@ class VOFormatterApp(_AppBase):
         self._page_indicator.pack(side="left", expand=True)
 
         self._next_btn = customtkinter.CTkButton(
-            page_nav, text="Next >", width=70, command=self._next_page,
+            page_nav,
+            text="Next >",
+            width=70,
+            command=self._next_page,
         )
         self._next_btn.pack(side="right")
 
         self._single_page_label = customtkinter.CTkLabel(
-            self._page_mode_frame, text="",
+            self._page_mode_frame,
+            text="",
         )
         self._single_page_label.pack(fill="both", expand=True, pady=(0, 8))
 
@@ -827,9 +908,7 @@ class VOFormatterApp(_AppBase):
             self._single_page_label.configure(image=img, text="")
         self._page_indicator.configure(text=f"{idx + 1} / {self._total_pages}")
         self._prev_btn.configure(state="normal" if idx > 0 else "disabled")
-        self._next_btn.configure(
-            state="normal" if idx < self._total_pages - 1 else "disabled"
-        )
+        self._next_btn.configure(state="normal" if idx < self._total_pages - 1 else "disabled")
 
     def _compute_display_width(self) -> int:
         """Return the page display width in pixels based on zoom mode."""
@@ -904,8 +983,10 @@ class VOFormatterApp(_AppBase):
         placeholder_h = max(200, int(display_width * 1.294))  # ~letter aspect ratio
         for _ in range(total_pages):
             lbl = customtkinter.CTkLabel(
-                self._preview_scroll, text="…",
-                width=display_width, height=placeholder_h,
+                self._preview_scroll,
+                text="…",
+                width=display_width,
+                height=placeholder_h,
                 text_color="gray",
             )
             lbl.pack(pady=(0, 8))
@@ -943,17 +1024,16 @@ class VOFormatterApp(_AppBase):
                     dh = int(raw_img.height * scale)
                     scaled = raw_img.resize((display_width, dh), Image.LANCZOS)
 
-                    self.after(0, lambda idx=i, im=scaled, dw=display_width, h=dh:
-                               self._on_page_ready(token, idx, im, dw, h))
+                    self.after(
+                        0, lambda idx=i, im=scaled, dw=display_width, h=dh: self._on_page_ready(token, idx, im, dw, h)
+                    )
                 doc.close()
             except Exception as e:
                 log.error("PDF render worker: %s", e)
 
         threading.Thread(target=_render_worker, daemon=True).start()
 
-    def _on_page_ready(
-        self, token: object, idx: int, img: Image.Image, dw: int, dh: int
-    ) -> None:
+    def _on_page_ready(self, token: object, idx: int, img: Image.Image, dw: int, dh: int) -> None:
         """Called on the main thread when one page finishes rendering."""
         if self._render_token is not token:
             return
@@ -964,9 +1044,7 @@ class VOFormatterApp(_AppBase):
             self._page_images[idx] = ctk_img
 
         if idx < len(self._preview_page_labels):
-            self._preview_page_labels[idx].configure(
-                image=ctk_img, text="", width=dw, height=dh
-            )
+            self._preview_page_labels[idx].configure(image=ctk_img, text="", width=dw, height=dh)
 
         if self._preview_mode_var.get() == "Page" and idx == self._current_page:
             self._show_single_page()
@@ -1235,7 +1313,8 @@ class VOFormatterApp(_AppBase):
 
     def _save_preset(self) -> None:
         dialog = customtkinter.CTkInputDialog(
-            text="Preset name:", title="Save Preset",
+            text="Preset name:",
+            title="Save Preset",
         )
         name = dialog.get_input()
         if not name or not name.strip():
@@ -1314,7 +1393,7 @@ class VOFormatterApp(_AppBase):
 
     def _on_mode_changed(self, mode: str) -> None:
         """Switch between Single File and Batch Folder modes."""
-        self._batch_mode = (mode == "Batch Folder")
+        self._batch_mode = mode == "Batch Folder"
         if self._batch_mode:
             self.browse_btn.configure(command=self._browse_batch_folder)
             self.input_entry.configure(state="normal")
@@ -1424,9 +1503,7 @@ class VOFormatterApp(_AppBase):
 
             for idx, file_path in enumerate(files):
                 filename = os.path.basename(file_path)
-                self.after(0, lambda i=idx, fn=filename: self._log(
-                    f"  [{i+1}/{total}] {fn}"
-                ))
+                self.after(0, lambda i=idx, fn=filename: self._log(f"  [{i + 1}/{total}] {fn}"))
 
                 entry = {"file": filename, "status": "success", "error": None, "pages": 0}
 
@@ -1438,52 +1515,56 @@ class VOFormatterApp(_AppBase):
                     # 'api' needs ANTHROPIC_API_KEY; 'claude-code' uses
                     # subscription auth via the local CLI.
                     preflight = None
-                    can_run_preflight = (
-                        not skipping_preflight
-                        and (backend_choice == "claude-code" or bool(api_key))
-                    )
+                    can_run_preflight = not skipping_preflight and (backend_choice == "claude-code" or bool(api_key))
                     if can_run_preflight:
                         text_hash = PreflightCache.hash_text(norm_text)
                         cached = self._preflight_cache.get(text_hash)
                         if cached:
                             preflight = cached
                             arch = preflight.archetype.value
-                            self.after(0, lambda a=arch: self._log(
-                                f"    Preflight: cached ({a})"
-                            ))
+                            self.after(0, lambda a=arch: self._log(f"    Preflight: cached ({a})"))
                         else:
-                            self.after(0, lambda b=backend_choice: self._log(
-                                f"    Preflight: analyzing ({b})..."
-                            ))
+                            self.after(0, lambda b=backend_choice: self._log(f"    Preflight: analyzing ({b})..."))
                             try:
                                 preflight = run_preflight(
-                                    backend_choice, norm_text, filename, api_key=api_key,
+                                    backend_choice,
+                                    norm_text,
+                                    filename,
+                                    api_key=api_key,
                                 )
                                 self._preflight_cache.put(text_hash, preflight)
                                 arch = preflight.archetype.value
                                 chars = len(preflight.characters)
-                                self.after(0, lambda a=arch, c=chars: self._log(
-                                    f"    Preflight: {a}, {c} character(s)"
-                                ))
+                                self.after(
+                                    0, lambda a=arch, c=chars: self._log(f"    Preflight: {a}, {c} character(s)")
+                                )
                             except PreflightError as pe:
                                 pe_msg = str(pe)
                                 self.after(0, lambda m=pe_msg: self._log(f"    Preflight failed: {m}"))
                     elif skipping_preflight:
-                        self.after(0, lambda: self._log(
-                            "    Preflight: skipped (toggle off)"
-                        ))
+                        self.after(0, lambda: self._log("    Preflight: skipped (toggle off)"))
                     elif not api_key:
-                        self.after(0, lambda: self._log(
-                            "    Preflight: skipped (no API key — switch backend to 'Claude Code' to use subscription)"
-                        ))
+                        self.after(
+                            0,
+                            lambda: self._log(
+                                "    Preflight: skipped (no API key — switch backend to"
+                                " 'Claude Code' to use subscription)"
+                            ),
+                        )
 
                     if preflight is None:
                         preflight = PreflightResult(
                             archetype=Archetype.MULTI_VOICE_DRAMA,
-                            characters=[], has_narrator=True, source_types=[],
-                            sections=[], detected_stage_directions=False,
-                            detected_sound_cues=False, metadata_blocks=[],
-                            pronunciation_flags=[], suggested_toggles={}, warnings=[],
+                            characters=[],
+                            has_narrator=True,
+                            source_types=[],
+                            sections=[],
+                            detected_stage_directions=False,
+                            detected_sound_cues=False,
+                            metadata_blocks=[],
+                            pronunciation_flags=[],
+                            suggested_toggles={},
+                            warnings=[],
                         )
 
                     file_toggles = resolve_toggles(
@@ -1498,9 +1579,7 @@ class VOFormatterApp(_AppBase):
                     base = os.path.splitext(filename)[0]
                     out_path = os.path.join(output_folder, f"{base}_formatted_batch.pdf")
                     generate_pdf(blocks, out_path, file_toggles)
-                    self.after(0, lambda p=out_path: self._log(
-                        f"    -> {os.path.basename(p)}"
-                    ))
+                    self.after(0, lambda p=out_path: self._log(f"    -> {os.path.basename(p)}"))
 
                     # Count pages
                     try:
@@ -1581,10 +1660,7 @@ class VOFormatterApp(_AppBase):
         self.analyze_btn.configure(state="disabled")
         if len(self.normalized_text) > 200_000:
             self._log("Script is very long — sampling for analysis...")
-        self._log(
-            f"Preflight: analyzing via {_BACKEND_LABELS[backend_choice]} "
-            f"(this usually takes 10–30s)..."
-        )
+        self._log(f"Preflight: analyzing via {_BACKEND_LABELS[backend_choice]} (this usually takes 10–30s)...")
         self.preflight_status.configure(
             text=f"  Analyzing ({_BACKEND_LABELS[backend_choice]})...",
             text_color="#4A9EFF",
@@ -1687,14 +1763,13 @@ class VOFormatterApp(_AppBase):
         if skipping:
             self.analyze_btn.configure(state="disabled")
             self.preflight_status.configure(
-                text="  Skipped (using defaults)", text_color="#FACC15",
+                text="  Skipped (using defaults)",
+                text_color="#FACC15",
             )
             self._apply_defaults()
             self._log("Preflight skipped. Using default toggles \u2014 adjust manually.")
         else:
-            self._has_preflight_data = bool(
-                self.preflight_result and self.preflight_result.characters
-            )
+            self._has_preflight_data = bool(self.preflight_result and self.preflight_result.characters)
             if self.script_path:
                 self.analyze_btn.configure(state="normal")
             self.preflight_status.configure(text="  Ready to analyze", text_color="gray")
@@ -1775,8 +1850,10 @@ class VOFormatterApp(_AppBase):
                     words = [p.word for p in preflight_snapshot.pronunciation_flags]
                     arch_ctx = preflight_snapshot.archetype.value.replace("_", " ")
                     pronunciation_guide = run_pronunciation(
-                        backend_choice, words,
-                        script_context=f"{arch_ctx} script", api_key=api_key,
+                        backend_choice,
+                        words,
+                        script_context=f"{arch_ctx} script",
+                        api_key=api_key,
                     )
 
                 blocks = format_script(
@@ -1873,17 +1950,15 @@ class VOFormatterApp(_AppBase):
         def _worker():
             try:
                 pronunciation_guide = {}
-                if (
-                    toggles.pronunciation_guide
-                    and preflight_snapshot
-                    and preflight_snapshot.pronunciation_flags
-                ):
+                if toggles.pronunciation_guide and preflight_snapshot and preflight_snapshot.pronunciation_flags:
                     if backend_choice == "claude-code" or api_key:
                         words = [p.word for p in preflight_snapshot.pronunciation_flags]
                         arch_ctx = preflight_snapshot.archetype.value.replace("_", " ")
                         pronunciation_guide = run_pronunciation(
-                            backend_choice, words,
-                            script_context=f"{arch_ctx} script", api_key=api_key,
+                            backend_choice,
+                            words,
+                            script_context=f"{arch_ctx} script",
+                            api_key=api_key,
                         )
                     else:
                         self.after(0, lambda: self._log("Pronunciation guide skipped (no API key)"))
@@ -1909,13 +1984,9 @@ class VOFormatterApp(_AppBase):
                         filename,
                         pronunciation_guide=pronunciation_guide or None,
                     )
-                    batch_blocks = VOFormatterApp._wrap_with_intro_outro(
-                        batch_blocks, intro_blocks, outro_blocks
-                    )
+                    batch_blocks = VOFormatterApp._wrap_with_intro_outro(batch_blocks, intro_blocks, outro_blocks)
                     generate_pdf(batch_blocks, batch_path, batch_toggles)
-                    self.after(0, lambda p=batch_path: self._log(
-                        f"Batch PDF saved: {os.path.basename(p)}"
-                    ))
+                    self.after(0, lambda p=batch_path: self._log(f"Batch PDF saved: {os.path.basename(p)}"))
                 self.after(0, lambda: self._on_generate_done(result_path, len(blocks)))
             except Exception as e:
                 msg = str(e)
