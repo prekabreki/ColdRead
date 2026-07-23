@@ -27,19 +27,34 @@ log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Diagnostic file log — always-on for the claude-code backend.
+# Diagnostic file log — gated behind VO_FORMAT_DEBUG.
 # ---------------------------------------------------------------------------
 # The GUI's debug textbox sits idle while the subprocess runs (the worker
 # thread blocks on subprocess.run). When something goes wrong in the
 # windowed exe — no console parent, hung child, weird .cmd shim — we have
 # no in-GUI breadcrumbs to read. This file log captures every step so the
 # user can paste it back when reporting issues.
+# Enable by setting the VO_FORMAT_DEBUG environment variable to any value.
+# The log is automatically rotated (truncated) at 1 MiB to prevent unbounded
+# growth. No script-derived content is ever written to the log.
 DEBUG_LOG_PATH = pathlib.Path.home() / "vo-format-claude-debug.log"
+_DEBUG_LOG_MAX_BYTES = 1_048_576  # 1 MiB
 
 
 def _dbg(msg: str) -> None:
-    """Append a timestamped line to the diagnostic log. Best-effort."""
+    """Append a timestamped line to the diagnostic log.
+
+    Only writes when VO_FORMAT_DEBUG is set in the environment.  Truncates
+    the log file when it exceeds _DEBUG_LOG_MAX_BYTES.  Best-effort — all
+    failures are silently swallowed.
+    """
+    if not os.environ.get("VO_FORMAT_DEBUG"):
+        return
     try:
+        # Rotate (truncate) if the file exceeds the size cap.
+        if DEBUG_LOG_PATH.exists() and DEBUG_LOG_PATH.stat().st_size > _DEBUG_LOG_MAX_BYTES:
+            with DEBUG_LOG_PATH.open("w", encoding="utf-8") as f:
+                f.write(f"[log rotated at {datetime.datetime.now().isoformat(timespec='milliseconds')}]\n")
         with DEBUG_LOG_PATH.open("a", encoding="utf-8") as f:
             f.write(f"{datetime.datetime.now().isoformat(timespec='milliseconds')}  {msg}\n")
     except OSError:
@@ -335,12 +350,6 @@ def _invoke_claude_cli(
             f"Claude CLI wrapper had no 'result' string: {stdout[:300]}"
         )
 
-    # Snippet log so we can audit what Claude actually returned without
-    # having to plumb the full response back to the GUI. Truncated to
-    # keep the file size sane across many runs.
-    _dbg(f"     result_head={result[:600]!r}")
-    if len(result) > 600:
-        _dbg(f"     result_tail={result[-300:]!r}")
     return result
 
 
