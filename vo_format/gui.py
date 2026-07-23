@@ -9,6 +9,7 @@ import tempfile
 import threading
 import tkinter as tk
 from tkinter import filedialog
+from typing import Any
 
 log = logging.getLogger(__name__)
 
@@ -127,8 +128,8 @@ class VOFormatterApp(_AppBase):
         self.file_type: str | None = None
         self.preflight_result: PreflightResult | None = None
         self.color_map: dict[str, str] = {}
-        self.toggle_widgets: dict[str, any] = {}
-        self.toggle_vars: dict[str, any] = {}
+        self.toggle_widgets: dict[str, Any] = {}
+        self.toggle_vars: dict[str, Any] = {}
         self.toggle_value_labels: dict[str, customtkinter.CTkLabel] = {}
         self._busy = False
         self._refresh_timer: str | None = None
