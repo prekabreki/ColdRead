@@ -121,10 +121,15 @@ def _find_best_break(text: str, max_pos: int, min_pos: int = 0) -> int | None:
         for m in pattern.finditer(window):
             abs_pos = window_start + m.end()
             if min_pos < abs_pos <= max_pos:
-                # Prefer higher priority; among equals prefer later position
-                if (priority > best_priority
-                        or (priority == best_priority
-                            and (best_pos is None or abs_pos > best_pos))):
+                # Prefer break closest to max_pos (balanced line length);
+                # among equal distances prefer higher priority;
+                # among equals prefer later position.
+                dist = max_pos - abs_pos
+                best_dist = max_pos - best_pos if best_pos is not None else max_pos + 1
+                if (dist < best_dist
+                        or (dist == best_dist and priority > best_priority)
+                        or (dist == best_dist and priority == best_priority
+                            and abs_pos > best_pos)):
                     best_pos = abs_pos
                     best_priority = priority
 
