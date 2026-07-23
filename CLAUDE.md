@@ -49,19 +49,22 @@ The preflight, pronunciation, and diagnostic calls all need `ANTHROPIC_API_KEY` 
 The pipeline is strictly one-direction and deterministic after the preflight step. Claude analyzes; Python formats. **Original script text is never sent back through the API for rewriting** — this is a load-bearing design invariant.
 
 ```
-extract_text → normalize_text → run_preflight (Claude API, JSON only)
+extract_text → normalize_text → resolve_backend (api / claude-code)
+  → run_preflight (backend dispatcher → preflight.py or claude_code_backend.py)
   → resolve_toggles (archetype defaults ← preflight suggestions ← CLI/GUI overrides)
-  → [optional] run_pronunciation (2nd API call)
+  → [optional] run_pronunciation (via same backend)
   → format_script → list[FormattedBlock]
   → generate_pdf (ReportLab)
-  → [optional] run_diagnostic (3rd API call, quality review)
+  → [optional] run_diagnostic (quality review, via same backend)
 ```
 
 ### Module responsibilities (under `vo_format/`)
 
 - `models.py` — single source of truth for enums (`Archetype`, `BlockType`, `LineType`, `NarratorStyle`, `QuotedTextStyle`, `MarginPreset`), dataclasses (`PreflightResult`, `FormatToggles`, `FormattedBlock`, `DiagnosticReport`). Touch this first when adding new toggle/block types.
 - `parser.py` — format-specific extraction (`pymupdf` for PDF, `python-docx` for DOCX, encoding fallback for text) and `normalize_text` (line endings, BOM, base64 image stripping, blank-line collapsing).
-- `preflight.py` — all Claude API interaction. Contains three system prompts (preflight, pronunciation, diagnostic) and the JSON-extraction helper that tolerates markdown fences. Long scripts (>200K chars) are sampled head/middle/tail before sending.
+- `backend.py` — backend selector/dispatcher. `resolve_backend` chooses between `"api"` (direct Anthropic API) and `"claude-code"` (local Claude Code CLI subprocess) via explicit flag, env var (`VO_FORMAT_BACKEND`), or auto-detect. Public entrypoints (`run_preflight`, `run_pronunciation`, `run_diagnostic`) share the same signature as their `preflight.py` counterparts with an extra leading `backend` argument so the CLI/GUI can route at call time.
+- `preflight.py` — direct Anthropic API backend. Contains three system prompts (preflight, pronunciation, diagnostic) and the JSON-extraction helper that tolerates markdown fences. Long scripts (>200K chars) are sampled head/middle/tail before sending.
+- `claude_code_backend.py` — Claude Code CLI subprocess backend. Mirrors the public API of `preflight.py` but invokes the local `claude` CLI in `--print` mode instead of calling the Anthropic API directly. Strips API-mode env vars so OAuth subscription tokens are used. This is the advertised subscription path for users without API credit.
 - `toggles.py` — `TOGGLE_DEFINITIONS` drives both the CLI argparse flags and the interactive toggle editor. `ARCHETYPE_DEFAULTS` maps each archetype to its default toggle overrides. `resolve_toggles` enforces the priority order: global defaults → archetype defaults → preflight suggestions → CLI/GUI overrides.
 - `formatter.py` — deterministic engine. Regex-based line classification (see the `RE_*` patterns) dispatched per-archetype. Produces a flat `list[FormattedBlock]`. This is the biggest file; most formatting bugs live here.
 - `cold_read.py` — optional post-pass that rewraps dialogue/narration at natural breath-group boundaries. Must stay in sync with `pdf_writer.py`'s `leftIndent` values (see `_STYLE_INDENT`).
