@@ -1856,7 +1856,7 @@ def format_script(
         numbered_lines = [(i + 1, line) for i, line in enumerate(lines)]
 
     # Assign character colors
-    color_map = assign_colors(preflight.characters, preflight.has_narrator)
+    color_map = assign_colors(preflight.characters)
 
     # Dispatch to archetype formatter
     formatter_fn = _ARCHETYPE_FORMATTERS.get(

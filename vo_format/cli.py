@@ -516,7 +516,7 @@ def main() -> None:
         )
 
     # Assign colors
-    color_map = assign_colors(preflight.characters, preflight.has_narrator)
+    color_map = assign_colors(preflight.characters)
 
     # Display preflight results
     _display_preflight(preflight, color_map)
