@@ -246,6 +246,7 @@ def _make_narrator_block(
     text: str,
     toggles: FormatToggles,
     source_line: int | None = None,
+    match_pattern: str = "FALLBACK_NARRATION",
 ) -> FormattedBlock:
     """Create a narration block with the configured narrator style."""
     return FormattedBlock(
@@ -256,6 +257,7 @@ def _make_narrator_block(
         italic=toggles.narrator_style == NarratorStyle.ITALIC,
         indent_level=1,
         source_line=source_line,
+        match_pattern=match_pattern,
     )
 
 
@@ -404,6 +406,7 @@ def _format_multi_voice_drama(
                     color=char_color,
                     indent_level=1,
                     source_line=line_num,
+                    match_pattern="RE_BOLD_CHARACTER",
                     speaker=canonical_name,
                 ))
             continue
@@ -436,6 +439,7 @@ def _format_multi_voice_drama(
                         color=char_color,
                         indent_level=1,
                         source_line=line_num,
+                        match_pattern="RE_PLAIN_CHARACTER",
                         speaker=canonical_name,
                     ))
                 continue
@@ -450,6 +454,7 @@ def _format_multi_voice_drama(
                 color=char_color,
                 indent_level=1,
                 source_line=line_num,
+                match_pattern="FALLBACK_DIALOGUE",
                 speaker=current_speaker,
             ))
         else:
@@ -498,6 +503,7 @@ def _format_single_narrator(
                 block_type=BlockType.SECTION_DIVIDER,
                 text="",
                 source_line=line_num,
+                match_pattern="RE_HORIZONTAL_RULE",
             ))
             current_speaker = None
             continue
@@ -517,6 +523,7 @@ def _format_single_narrator(
                 is_centered=True,
                 font_size_override=(toggles.font_size + 2) if toggles.font_size else None,
                 source_line=line_num,
+                match_pattern="RE_SECTION_HEADER",
             )
             if toggles.section_breaks and not first_section:
                 block.page_break_before = True
@@ -536,6 +543,7 @@ def _format_single_narrator(
                     is_centered=True,
                     font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
                     source_line=line_num,
+                    match_pattern="RE_SOUND_CUE",
                 ))
             continue
 
@@ -551,6 +559,7 @@ def _format_single_narrator(
                     indent_level=1,
                     font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
                     source_line=line_num,
+                    match_pattern="RE_STAGE_DIRECTION_PAREN",
                     speaker=current_speaker,
                 ))
             continue
@@ -567,6 +576,7 @@ def _format_single_narrator(
                     indent_level=1,
                     font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
                     source_line=line_num,
+                    match_pattern="RE_STAGE_DIRECTION_BRACKET",
                     speaker=current_speaker,
                 ))
             continue
@@ -588,6 +598,7 @@ def _format_single_narrator(
                 bold=True,
                 keep_with_next=True,
                 source_line=line_num,
+                match_pattern="RE_BOLD_CHARACTER",
                 speaker=canonical_name,
             ))
 
@@ -598,6 +609,7 @@ def _format_single_narrator(
                     color=char_color,
                     indent_level=1,
                     source_line=line_num,
+                    match_pattern="RE_BOLD_CHARACTER",
                     speaker=canonical_name,
                 ))
             continue
@@ -614,6 +626,7 @@ def _format_single_narrator(
                 italic=italic,
                 indent_level=indent,
                 source_line=line_num,
+                match_pattern="RE_QUOTED_SINGLE",
             ))
             in_quoted_block = False
             continue
@@ -630,6 +643,7 @@ def _format_single_narrator(
                 italic=italic,
                 indent_level=indent,
                 source_line=line_num,
+                match_pattern="RE_QUOTED_START",
             ))
             in_quoted_block = True
             continue
@@ -647,6 +661,7 @@ def _format_single_narrator(
                     italic=italic,
                     indent_level=indent,
                     source_line=line_num,
+                    match_pattern="RE_QUOTED_END",
                 ))
                 in_quoted_block = False
                 continue
@@ -662,6 +677,7 @@ def _format_single_narrator(
                     italic=italic,
                     indent_level=indent,
                     source_line=line_num,
+                    match_pattern="RE_QUOTED_BLOCK",
                 ))
                 continue
 
@@ -716,6 +732,7 @@ def _format_continuous_prose(
                 block_type=BlockType.SECTION_DIVIDER,
                 text="",
                 source_line=line_num,
+                match_pattern="RE_HORIZONTAL_RULE",
             ))
             continue
 
@@ -733,6 +750,7 @@ def _format_continuous_prose(
                 is_centered=True,
                 font_size_override=(toggles.font_size + 2) if toggles.font_size else None,
                 source_line=line_num,
+                match_pattern="RE_SECTION_HEADER",
             )
             if toggles.section_breaks and not first_section:
                 block.page_break_before = True
@@ -748,6 +766,7 @@ def _format_continuous_prose(
                 text=cleaned,
                 color=NARRATOR_COLOR,
                 source_line=line_num,
+                match_pattern="FALLBACK_PROSE",
             ))
 
     return blocks
@@ -795,6 +814,7 @@ def _format_document_archive(
                 block_type=BlockType.SECTION_DIVIDER,
                 text="",
                 source_line=line_num,
+                match_pattern="RE_HORIZONTAL_RULE",
             ))
             continue
 
@@ -819,6 +839,7 @@ def _format_document_archive(
                 is_centered=True,
                 font_size_override=(toggles.font_size + 2) if toggles.font_size else None,
                 source_line=line_num,
+                match_pattern="RE_SECTION_HEADER",
             )
             if toggles.section_breaks and not first_section:
                 block.page_break_before = True
@@ -846,6 +867,7 @@ def _format_document_archive(
                 bold=True,
                 is_centered=True,
                 source_line=line_num,
+                match_pattern="RE_DOC_REF",
             ))
             in_source_block = True
             continue
@@ -869,6 +891,7 @@ def _format_document_archive(
                 font_size_override=(toggles.font_size + 2) if toggles.font_size else None,
                 source_line=line_num,
                 source_type=source_type,
+                match_pattern="RE_SOURCE_LABEL",
             )
             if toggles.section_breaks and not first_section:
                 block.page_break_before = True
@@ -893,6 +916,7 @@ def _format_document_archive(
                 bold=True,
                 is_centered=True,
                 source_line=line_num,
+                match_pattern="RE_SOURCE_LABEL",
             )
             if toggles.section_breaks and not first_section:
                 block.page_break_before = True
@@ -916,6 +940,7 @@ def _format_document_archive(
                 bold=True,
                 is_centered=True,
                 source_line=line_num,
+                match_pattern="RE_SOURCE_LABEL",
             ))
             in_source_block = True
             continue
@@ -930,6 +955,7 @@ def _format_document_archive(
                 is_centered=True,
                 font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
                 source_line=line_num,
+                match_pattern="RE_PLAIN_SOUND_CUE",
             ))
             continue
         elif m and not toggles.sound_cues:
@@ -946,6 +972,7 @@ def _format_document_archive(
                 indent_level=1,
                 font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
                 source_line=line_num,
+                match_pattern="RE_PLAIN_STAGE_DIRECTION",
             ))
             continue
         elif m and not toggles.stage_directions:
@@ -961,6 +988,7 @@ def _format_document_archive(
                 is_centered=True,
                 font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
                 source_line=line_num,
+                match_pattern="RE_SOUND_CUE",
             ))
             continue
         elif m and not toggles.sound_cues:
@@ -977,6 +1005,7 @@ def _format_document_archive(
                 indent_level=1,
                 font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
                 source_line=line_num,
+                match_pattern="RE_STAGE_DIRECTION_PAREN",
             ))
             continue
         elif m and not toggles.stage_directions:
@@ -992,6 +1021,7 @@ def _format_document_archive(
                 indent_level=1,
                 font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
                 source_line=line_num,
+                match_pattern="RE_STAGE_DIRECTION_BRACKET",
             ))
             continue
         elif m and not toggles.stage_directions:
@@ -1059,6 +1089,7 @@ def _format_mixed_media(
                 block_type=BlockType.SECTION_DIVIDER,
                 text="",
                 source_line=line_num,
+                match_pattern="RE_HORIZONTAL_RULE",
             ))
             current_speaker = None
             continue
@@ -1084,6 +1115,7 @@ def _format_mixed_media(
                 is_centered=True,
                 font_size_override=(toggles.font_size + 2) if toggles.font_size else None,
                 source_line=line_num,
+                match_pattern="RE_SECTION_HEADER",
             )
             if toggles.section_breaks and not first_section:
                 block.page_break_before = True
@@ -1111,6 +1143,7 @@ def _format_mixed_media(
                 bold=True,
                 is_centered=True,
                 source_line=line_num,
+                match_pattern="RE_SOURCE_LABEL",
             )
             if toggles.section_breaks and not first_section:
                 block.page_break_before = True
@@ -1134,6 +1167,7 @@ def _format_mixed_media(
                     indent_level=1,
                     font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
                     source_line=line_num,
+                    match_pattern="RE_SOURCE_LABEL",
                 ))
                 continue
 
@@ -1152,6 +1186,7 @@ def _format_mixed_media(
                     indent_level=0,
                     source_line=line_num,
                     source_type=source_type,
+                    match_pattern="RE_SOURCE_LABEL",
                 ))
                 current_speaker = None
                 continue
@@ -1170,6 +1205,7 @@ def _format_mixed_media(
                 bold=True,
                 is_centered=True,
                 source_line=line_num,
+                match_pattern="RE_SOURCE_LABEL",
             ))
             in_source_block = True
             current_speaker = None
@@ -1192,6 +1228,7 @@ def _format_mixed_media(
                 bold=True,
                 is_centered=True,
                 source_line=line_num,
+                match_pattern="RE_NARRATIVE_LABEL",
             )
             if toggles.section_breaks and not first_section:
                 block.page_break_before = True
@@ -1210,6 +1247,7 @@ def _format_mixed_media(
                 is_centered=True,
                 font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
                 source_line=line_num,
+                match_pattern="RE_SOUND_CUE",
             ))
             continue
         elif m and not toggles.sound_cues:
@@ -1225,6 +1263,7 @@ def _format_mixed_media(
                 is_centered=True,
                 font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
                 source_line=line_num,
+                match_pattern="RE_PLAIN_SOUND_CUE",
             ))
             continue
         elif m and not toggles.sound_cues:
@@ -1241,6 +1280,7 @@ def _format_mixed_media(
                 indent_level=1,
                 font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
                 source_line=line_num,
+                match_pattern="RE_STAGE_DIRECTION_PAREN",
                 speaker=current_speaker,
             ))
             continue
@@ -1258,6 +1298,7 @@ def _format_mixed_media(
                 indent_level=1,
                 font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
                 source_line=line_num,
+                match_pattern="RE_STAGE_DIRECTION_BRACKET",
                 speaker=current_speaker,
             ))
             continue
@@ -1275,6 +1316,7 @@ def _format_mixed_media(
                 indent_level=1,
                 font_size_override=(toggles.font_size - 2) if toggles.font_size else None,
                 source_line=line_num,
+                match_pattern="RE_PLAIN_STAGE_DIRECTION",
                 speaker=current_speaker,
             ))
             continue
@@ -1297,6 +1339,7 @@ def _format_mixed_media(
                 bold=True,
                 keep_with_next=True,
                 source_line=line_num,
+                match_pattern="RE_BOLD_CHARACTER",
                 speaker=canonical_name,
             ))
             if remainder:
@@ -1306,6 +1349,7 @@ def _format_mixed_media(
                     color=char_color,
                     indent_level=1,
                     source_line=line_num,
+                    match_pattern="RE_BOLD_CHARACTER",
                     speaker=canonical_name,
                 ))
             continue
@@ -1327,6 +1371,7 @@ def _format_mixed_media(
                     bold=True,
                     keep_with_next=True,
                     source_line=line_num,
+                    match_pattern="RE_PLAIN_CHARACTER",
                     speaker=canonical_name,
                 ))
                 if remainder:
@@ -1336,6 +1381,7 @@ def _format_mixed_media(
                         color=char_color,
                         indent_level=1,
                         source_line=line_num,
+                        match_pattern="RE_PLAIN_CHARACTER",
                         speaker=canonical_name,
                     ))
                 continue
@@ -1350,6 +1396,7 @@ def _format_mixed_media(
                 color=char_color,
                 indent_level=1,
                 source_line=line_num,
+                match_pattern="FALLBACK_DIALOGUE",
                 speaker=current_speaker,
             ))
         else:
