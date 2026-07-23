@@ -34,7 +34,7 @@ from .pdf_writer import generate_pdf
 from .cache import PreflightCache
 from .backend import VALID_BACKENDS, resolve_backend, run_preflight, run_pronunciation
 from .preflight import PreflightError
-from .presets import BUILTIN_PRESETS, delete_preset, list_presets, load_preset, save_preset
+from .presets import BUILTIN_PRESETS, delete_preset, list_presets, load_preset, save_preset, toggles_to_dict
 from .toggles import TOGGLE_DEFINITIONS, resolve_toggles
 
 # Optional dependencies — graceful fallback
@@ -1379,21 +1379,7 @@ class VOFormatterApp(_AppBase):
 
     def _collect_toggles_as_dict(self) -> dict:
         """Read current widget values as a dict for resolve_toggles overrides."""
-        result = {}
-        for defn in TOGGLE_DEFINITIONS:
-            name = defn["name"]
-            var = self.toggle_vars.get(name)
-            if var is None:
-                continue
-            if defn["type"] is bool:
-                result[name] = var.get() == "on"
-            elif defn["type"] is float:
-                result[name] = round(var.get() * 4) / 4
-            elif defn["type"] is int and "choices" in defn:
-                result[name] = int(var.get())
-            elif defn["type"] is str:
-                result[name] = var.get()
-        return result
+        return toggles_to_dict(self._collect_toggles())
 
     def _run_batch_generate(self) -> None:
         if self._busy or not self._batch_files:
