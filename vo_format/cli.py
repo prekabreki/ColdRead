@@ -492,7 +492,7 @@ def main() -> None:
             )
             console.print(" [green]done[/green]")
         except PreflightError as e:
-            console.print(f" [red]failed[/red]")
+            console.print(" [red]failed[/red]")
             console.print(f"  [red]{e}[/red]")
             console.print("  Falling back to defaults.")
     else:
@@ -566,7 +566,7 @@ def main() -> None:
             else:
                 console.print(" [yellow]no results[/yellow]")
         except PreflightError as e:
-            console.print(f" [red]failed[/red]")
+            console.print(" [red]failed[/red]")
             console.print(f"  [red]{e}[/red]")
             console.print("  Skipping pronunciation guide.")
             pronunciation_guide = {}
@@ -596,13 +596,13 @@ def main() -> None:
             sys.exit(0)
 
     # Step 6: Generate PDF
-    console.print(f"  Generating PDF...", end="")
+    console.print("  Generating PDF...", end="")
     try:
         output_path = generate_pdf(blocks, output_path, toggles)
-        console.print(f" [green]done[/green]")
+        console.print(" [green]done[/green]")
         console.print(f"\n  [bold green]Output:[/bold green] {output_path}")
     except Exception as e:
-        console.print(f" [red]failed[/red]")
+        console.print(" [red]failed[/red]")
         console.print(f"  [red]PDF generation error: {e}[/red]")
         sys.exit(1)
 
