@@ -33,7 +33,16 @@ _STYLE_INDENT = WRAPPABLE_INDENT_UNITS
 # line break is permitted.
 _BREAK_RULES: list[tuple[re.Pattern, int]] = [
     # Priority 3: sentence endings (.!? optionally followed by closing quote)
-    (re.compile(r'[.!?][\u201D"\']*\s'), 3),
+    # Exclude common abbreviations and initials to avoid false positives.
+    (re.compile(
+        r'(?<!\b[A-Z])'           # initials (e.g. "J. K. Rowling", "U.S.A.")
+        r'(?<!\bMr)(?<!\bMs)(?<!\bDr)(?<!\bSt)(?<!\bLt)(?<!\bJr)(?<!\bSr)(?<!\bvs)'
+        r'(?<!\bMrs)(?<!\betc)(?<!\bInc)(?<!\bLtd)(?<!\bEst)(?<!\bSgt)(?<!\bCol)'
+        r'(?<!\be\.g)(?<!\bi\.e)(?<!\ba\.m)(?<!\bp\.m)'
+        r'(?<!\bProf)(?<!\bCapt)(?<!\bDept)(?<!\bGovt)'
+        r'(?<!\bapprox)'
+        r'[.!?][\u201D"\']*\s',
+    ), 3),
     # Priority 2: semicolon / colon clause boundary
     (re.compile(r'[;:]\s'), 2),
     # Priority 2: em-dash (with optional space after)
