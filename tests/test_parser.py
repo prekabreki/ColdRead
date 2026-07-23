@@ -10,9 +10,7 @@ from vo_format.parser import MAX_FILE_BYTES, extract_text, normalize_text
 def test_normalize_collapses_blank_lines():
     text = "a\n\n\n\n\nb\n"
     out = normalize_text(text)
-    # 3+ blank lines collapse to 2 blank lines (3 newlines total).
-    assert "\n\n\n\n" not in out
-    assert "\n\n\n" in out or out.count("\n") <= 3
+    assert out == "a\n\n\nb\n"
 
 
 def test_normalize_strips_bom_and_crlf():
@@ -64,4 +62,3 @@ def test_extract_txt_roundtrip(tmp_path):
     text, ext = extract_text(str(p))
     assert ext == "md"
     assert "Title" in text
-    assert MAX_FILE_BYTES > 0  # sanity: constant is exported
