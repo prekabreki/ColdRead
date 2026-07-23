@@ -184,7 +184,7 @@ _HARDCODED_SOURCE_PATTERNS: list[tuple[re.Pattern, str, object]] = [
     (RE_BROADCAST, "broadcast", lambda m: m.group(1).strip()),
     (RE_ORG_HEADER, "corporate_document", lambda m: f"{m.group(1).strip()} - {m.group(2).strip()}"),
     (RE_EMAIL_HEADER, "email", lambda m: m.group(0).strip()),
-    (RE_NEWS_TICKER, "news_ticker", lambda m: f"News Ticker"),
+    (RE_NEWS_TICKER, "news_ticker", lambda m: "News Ticker"),
     (RE_NARRATIVE_LABEL, "narrative_label", lambda m: m.group(0).strip()),
 ]
 
