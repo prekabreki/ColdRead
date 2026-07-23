@@ -55,17 +55,26 @@ def assign_colors(
     for n in narrators:
         color_map[n.name] = NARRATOR_COLOR
 
+    used_hexes: set[str] = {NARRATOR_COLOR}
+
     # Sort speakers by line count descending so the most prominent voice
     # gets the most visually distinct color (Blue).
     speakers_sorted = sorted(speakers, key=lambda c: c.line_count, reverse=True)
 
+    palette_hexes = {p[0].upper() for p in PALETTE}
     for i, char in enumerate(speakers_sorted):
         palette_color = PALETTE[i % len(PALETTE)][0]
         # Prefer the preflight's suggested color if it's a valid hex from our palette
-        palette_hexes = {p[0] for p in PALETTE}
-        if char.suggested_color and char.suggested_color.upper() in {h.upper() for h in palette_hexes}:
-            color_map[char.name] = char.suggested_color
+        # and not already assigned to another character.
+        if (
+            char.suggested_color
+            and char.suggested_color.upper() in palette_hexes
+            and char.suggested_color.upper() not in {h.upper() for h in used_hexes}
+        ):
+            color = char.suggested_color
         else:
-            color_map[char.name] = palette_color
+            color = palette_color
+        used_hexes.add(color.upper())
+        color_map[char.name] = color
 
     return color_map
