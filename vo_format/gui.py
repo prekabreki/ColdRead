@@ -1394,7 +1394,7 @@ class VOFormatterApp(_AppBase):
             return
 
         gui_overrides = self._collect_toggles_as_dict()
-        api_key = self._get_api_key()
+        api_key = _find_api_key()
         backend_choice = self._get_backend()
         skipping_preflight = self.skip_preflight_var.get() == "on"
         files = list(self._folder_files)
@@ -1526,9 +1526,7 @@ class VOFormatterApp(_AppBase):
     # API key
     # ------------------------------------------------------------------
 
-    def _get_api_key(self) -> str | None:
-        """Get the API key from the environment."""
-        return _find_api_key()
+
 
     def _get_backend(self) -> str:
         """Resolve the currently-selected analysis backend."""
@@ -1556,7 +1554,7 @@ class VOFormatterApp(_AppBase):
                 self._on_preflight_done(cached, from_cache=True)
                 return
 
-        api_key = self._get_api_key()
+        api_key = _find_api_key()
         backend_choice = self._get_backend()
         if backend_choice == "api" and not api_key:
             self._log("WARNING: No API key found.")
@@ -1741,7 +1739,7 @@ class VOFormatterApp(_AppBase):
         # Snapshot to insulate the worker from main-thread mutations.
         text_snapshot = self.normalized_text
         preflight_snapshot = self.preflight_result
-        api_key = self._get_api_key()
+        api_key = _find_api_key()
         backend_choice = self._get_backend()
         intro_blocks, outro_blocks = self._get_intro_outro_blocks()
 
@@ -1848,7 +1846,7 @@ class VOFormatterApp(_AppBase):
         # Snapshot to insulate the worker from main-thread mutations.
         text_snapshot = self.normalized_text
         preflight_snapshot = self.preflight_result
-        api_key = self._get_api_key()
+        api_key = _find_api_key()
         backend_choice = self._get_backend()
         intro_blocks, outro_blocks = self._get_intro_outro_blocks()
 
