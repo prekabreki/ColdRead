@@ -32,6 +32,8 @@ from .models import (
 
 log = logging.getLogger(__name__)
 
+_fonts_registered: bool = False
+
 # ---------------------------------------------------------------------------
 # TrueType font registration
 # ---------------------------------------------------------------------------
@@ -100,8 +102,9 @@ def _index_fonts(filenames: set) -> dict:
 def _register_fonts() -> None:
     """Register a Courier New TTF family if available, else a metric-compatible
     substitute (Liberation Mono); otherwise keep ReportLab's Type-1 Courier."""
-    global _FONT_FAMILY, _FONT_BOLD, _FONT_ITALIC, _FONT_BOLD_ITALIC
+    global _FONT_FAMILY, _FONT_BOLD, _FONT_ITALIC, _FONT_BOLD_ITALIC, _fonts_registered
 
+    _fonts_registered = True
     wanted = {fn for fs in _FONT_SETS for fn in fs.values()}
     found = _index_fonts(wanted)
 
@@ -133,8 +136,6 @@ def _register_fonts() -> None:
     log.info(
         "No Courier New / Liberation Mono TTFs found; falling back to Type-1 Courier."
     )
-
-_register_fonts()
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -581,6 +582,9 @@ def generate_pdf(
     Returns:
         The output file path.
     """
+    if not _fonts_registered:
+        _register_fonts()
+
     margins = MARGIN_PRESETS.get(toggles.margins, MARGIN_PRESETS[MarginPreset.WIDE])
 
     doc = SimpleDocTemplate(
