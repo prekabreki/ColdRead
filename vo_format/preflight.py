@@ -150,7 +150,7 @@ Return this exact JSON structure:
     "character_legend": <bool>,
     "font_size": <int>,
     "line_spacing": <float>,
-    "margins": "<normal|wide|extra>"
+    "margins": "<normal|wide|extra|narrow>"
   },
   "warnings": ["<warning_string>"]
 }"""

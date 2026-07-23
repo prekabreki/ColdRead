@@ -38,6 +38,9 @@ There is no linter config or CI — don't invent commands for them. For integrat
 - `--non-interactive` — skip the toggle-review prompt (useful when scripting)
 - `--preview` — render a Rich terminal preview instead of / before the PDF
 - `--diagnose` — after formatting, do a second API call that flags misclassified lines; also dumps `<output>_debug.json`
+- `--margins {normal,wide,extra,narrow}` — set the page margin preset
+- `--backend {api,claude-code}` — choose the analysis backend
+- `--list-samples` — print paths of bundled sample scripts
 - Toggle flags follow `--flag` / `--no-flag` pairs (see `vo_format/cli.py:92-117`)
 
 ### API key
