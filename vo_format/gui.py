@@ -140,10 +140,10 @@ class VOFormatterApp(_AppBase):
         # Preflight cache
         self._preflight_cache = PreflightCache()
 
-        # Batch processing state
-        self._batch_mode = False
-        self._batch_folder: str | None = None
-        self._batch_files: list[str] = []
+        # Folder processing state
+        self._folder_mode = False
+        self._folder_path: str | None = None
+        self._folder_files: list[str] = []
 
         # Preview state
         self._page_images: list[customtkinter.CTkImage | None] = []
@@ -611,7 +611,7 @@ class VOFormatterApp(_AppBase):
 
         self._export_batch_var = customtkinter.StringVar(value="off")
         self._export_batch_switch = customtkinter.CTkSwitch(
-            self.main_frame, text="Also export voice batch PDF  (_formatted_batched.pdf)",
+            self.main_frame, text="Also export voice batch PDF  (_formatted_voicebatch.pdf)",
             variable=self._export_batch_var, onvalue="on", offvalue="off",
         )
         self._export_batch_switch.grid(row=row, column=0, sticky="w", pady=(0, 8))
@@ -1310,14 +1310,14 @@ class VOFormatterApp(_AppBase):
             )
 
     # ------------------------------------------------------------------
-    # Batch mode
+    # Folder mode
     # ------------------------------------------------------------------
 
     def _on_mode_changed(self, mode: str) -> None:
         """Switch between Single File and Batch Folder modes."""
-        self._batch_mode = (mode == "Batch Folder")
-        if self._batch_mode:
-            self.browse_btn.configure(command=self._browse_batch_folder)
+        self._folder_mode = (mode == "Batch Folder")
+        if self._folder_mode:
+            self.browse_btn.configure(command=self._browse_folder)
             self.input_entry.configure(state="normal")
             self.input_entry.delete(0, "end")
             self.input_entry.configure(
@@ -1333,8 +1333,8 @@ class VOFormatterApp(_AppBase):
             self.script_path = None
             self.raw_text = None
             self.normalized_text = None
-            self._batch_folder = None
-            self._batch_files = []
+            self._folder_path = None
+            self._folder_files = []
         else:
             self.browse_btn.configure(command=self._browse_input)
             self.input_entry.configure(state="normal")
@@ -1346,19 +1346,19 @@ class VOFormatterApp(_AppBase):
             self.output_entry.configure(placeholder_text="Output folder...")
             self.preview_btn.configure(state="disabled")
             self.generate_btn.configure(text="Generate PDF", state="disabled")
-            self._batch_folder = None
-            self._batch_files = []
+            self._folder_path = None
+            self._folder_files = []
 
-    def _browse_batch_folder(self) -> None:
+    def _browse_folder(self) -> None:
         folder = filedialog.askdirectory(title="Select Folder of Scripts")
         if not folder:
             return
-        self._batch_folder = folder
+        self._folder_path = folder
         files = []
         for f in sorted(os.listdir(folder)):
             if os.path.splitext(f)[1].lower() in _SUPPORTED_EXTENSIONS:
                 files.append(os.path.join(folder, f))
-        self._batch_files = files
+        self._folder_files = files
 
         self.input_entry.configure(state="normal")
         self.input_entry.delete(0, "end")
@@ -1385,7 +1385,7 @@ class VOFormatterApp(_AppBase):
         return toggles_to_dict(self._collect_toggles())
 
     def _run_batch_generate(self) -> None:
-        if self._busy or not self._batch_files:
+        if self._busy or not self._folder_files:
             return
 
         output_folder = self.output_entry.get().strip()
@@ -1397,7 +1397,7 @@ class VOFormatterApp(_AppBase):
         api_key = self._get_api_key()
         backend_choice = self._get_backend()
         skipping_preflight = self.skip_preflight_var.get() == "on"
-        files = list(self._batch_files)
+        files = list(self._folder_files)
         total = len(files)
         intro_blocks, outro_blocks = self._get_intro_outro_blocks()
 
@@ -1483,7 +1483,7 @@ class VOFormatterApp(_AppBase):
                     blocks = VOFormatterApp._wrap_with_intro_outro(blocks, intro_blocks, outro_blocks)
 
                     base = os.path.splitext(filename)[0]
-                    out_path = os.path.join(output_folder, f"{base}_formatted_batch.pdf")
+                    out_path = os.path.join(output_folder, f"{base}_formatted_folder.pdf")
                     generate_pdf(blocks, out_path, file_toggles)
                     self.after(0, lambda p=out_path: self._log(
                         f"    -> {os.path.basename(p)}"
@@ -1822,7 +1822,7 @@ class VOFormatterApp(_AppBase):
     # ------------------------------------------------------------------
 
     def _run_generate(self) -> None:
-        if self._batch_mode:
+        if self._folder_mode:
             return self._run_batch_generate()
         if self._busy:
             return
@@ -1837,7 +1837,7 @@ class VOFormatterApp(_AppBase):
         base = os.path.splitext(os.path.basename(self.script_path))[0]
         output_path = os.path.join(output_folder, f"{base}_formatted.pdf")
         export_batch = self._export_batch_var.get() == "on"
-        batch_path = os.path.join(output_folder, f"{base}_formatted_batched.pdf") if export_batch else None
+        batch_path = os.path.join(output_folder, f"{base}_formatted_voicebatch.pdf") if export_batch else None
 
         if self.preflight_result is None:
             self._apply_defaults()
