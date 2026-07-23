@@ -112,3 +112,78 @@ def test_every_archetype_runs_without_error():
         toggles = resolve_toggles(arch)
         blocks = format_script(text, preflight, toggles, "x.md")
         assert isinstance(blocks, list)
+
+
+def test_multi_voice_drama_exact_block_sequence():
+    text = normalize_text(
+        "**CAPTAIN:** Report.\n\n"
+        "*(urgent tone)*\n\n"
+        "CREW: All quiet.\n"
+    )
+    preflight = _empty_preflight(
+        Archetype.MULTI_VOICE_DRAMA,
+        characters=[
+            CharacterInfo(name="CAPTAIN", line_count=2, suggested_color="#2563EB"),
+            CharacterInfo(name="CREW", line_count=1, suggested_color="#DC2626"),
+        ],
+        has_narrator=False,
+    )
+    toggles = resolve_toggles(Archetype.MULTI_VOICE_DRAMA)
+    toggles.character_legend = False
+    blocks = format_script(text, preflight, toggles, "test.md")
+    assert [b.block_type for b in blocks] == [
+        BlockType.CHARACTER_NAME,
+        BlockType.DIALOGUE,
+        BlockType.BLANK_LINE,
+        BlockType.STAGE_DIRECTION,
+        BlockType.BLANK_LINE,
+        BlockType.CHARACTER_NAME,
+        BlockType.DIALOGUE,
+        BlockType.BLANK_LINE,
+    ]
+
+
+def test_name_like_line_stays_narration():
+    text = normalize_text(
+        "The captain gave the order.\n"
+        "NOTE: All hands on deck.\n"
+        "The crew scrambled.\n"
+    )
+    preflight = _empty_preflight(
+        Archetype.MULTI_VOICE_DRAMA,
+        characters=[
+            CharacterInfo(name="CAPTAIN", line_count=1, suggested_color="#2563EB"),
+        ],
+        has_narrator=True,
+    )
+    toggles = resolve_toggles(Archetype.MULTI_VOICE_DRAMA)
+    toggles.title_page = False
+    toggles.character_legend = False
+    blocks = format_script(text, preflight, toggles, "test.md")
+    types = [b.block_type for b in blocks]
+    content_types = [t for t in types if t != BlockType.BLANK_LINE]
+    assert BlockType.CHARACTER_NAME not in content_types
+    assert all(t == BlockType.NARRATION for t in content_types)
+
+
+def test_metadata_survives_when_strip_metadata_off():
+    from vo_format.models import MetadataBlock
+
+    text = normalize_text(
+        "Line one.\n"
+        "YOUTUBE TITLE: Keep me.\n"
+        "Line two.\n"
+    )
+    preflight = _empty_preflight(Archetype.SINGLE_NARRATOR)
+    preflight.metadata_blocks = [
+        MetadataBlock(type="youtube_title", start_line=2, end_line=2)
+    ]
+    toggles = resolve_toggles(Archetype.SINGLE_NARRATOR)
+    toggles.strip_metadata = False
+    toggles.title_page = False
+    toggles.character_legend = False
+    blocks = format_script(text, preflight, toggles, "t.md")
+    joined = "\n".join(b.text for b in blocks)
+    assert "Keep me" in joined
+    assert "Line one" in joined
+    assert "Line two" in joined
