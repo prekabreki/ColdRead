@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import typing
 from dataclasses import fields
 from enum import Enum
 from typing import Any
+
+log = logging.getLogger(__name__)
 
 from .models import (
     Archetype,
@@ -278,6 +281,8 @@ def resolve_toggles(
     for key, value in arch_defaults.items():
         if hasattr(toggles, key):
             setattr(toggles, key, coerce_value(key, value))
+        else:
+            log.debug("Unknown archetype default toggle '%s' — skipping", key)
 
     # Apply preflight suggestions (map spec toggle names to our field names)
     toggle_name_map = {
@@ -289,11 +294,15 @@ def resolve_toggles(
         mapped_key = toggle_name_map.get(key, key)
         if hasattr(toggles, mapped_key):
             setattr(toggles, mapped_key, coerce_value(mapped_key, value))
+        else:
+            log.debug("Unknown preflight suggestion '%s' (mapped to '%s') — skipping", key, mapped_key)
 
     # Apply CLI overrides (highest priority)
     for key, value in cli_overrides.items():
         if hasattr(toggles, key) and value is not None:
             setattr(toggles, key, coerce_value(key, value))
+        elif not hasattr(toggles, key):
+            log.debug("Unknown CLI override '%s' — skipping", key)
 
     return toggles
 
