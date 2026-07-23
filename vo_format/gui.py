@@ -126,6 +126,7 @@ class VOFormatterApp(_AppBase):
         self.blocks = None
         self.toggle_widgets: dict[str, any] = {}
         self.toggle_vars: dict[str, any] = {}
+        self.toggle_value_labels: dict[str, customtkinter.CTkLabel] = {}
         self._busy = False
         self._refresh_timer: str | None = None
         self._has_preflight_data = False
@@ -435,6 +436,7 @@ class VOFormatterApp(_AppBase):
 
             val_label = customtkinter.CTkLabel(slider_frame, text=str(defn["default"]), width=40)
             val_label.grid(row=0, column=2, padx=(8, 0))
+            self.toggle_value_labels[defn["name"]] = val_label
 
             var = customtkinter.DoubleVar(value=defn["default"])
 
@@ -1155,13 +1157,9 @@ class VOFormatterApp(_AppBase):
                     var.set("on" if value else "off")
                 elif defn["type"] is float:
                     var.set(value)
-                    widget = self.toggle_widgets.get(name)
-                    if widget:
-                        parent = widget.master
-                        for child in parent.winfo_children():
-                            if isinstance(child, customtkinter.CTkLabel) and child.cget("width") == 40:
-                                child.configure(text=f"{value:.2f}")
-                                break
+                    lbl = self.toggle_value_labels.get(name)
+                    if lbl:
+                        lbl.configure(text=f"{value:.2f}")
                 elif defn["type"] is int and "choices" in defn:
                     var.set(str(value))
                 elif defn["type"] is str:
