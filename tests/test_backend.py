@@ -69,33 +69,26 @@ def test_resolve_backend_auto_falls_back_to_claude_code(monkeypatch, tmp_path):
 
 def test_build_subprocess_env_strips_api_key_by_default(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-secret")
-    env = claude_code_backend._build_subprocess_env(force_api_key=False)
+    env = claude_code_backend._build_subprocess_env()
     assert "ANTHROPIC_API_KEY" not in env
-
-
-def test_build_subprocess_env_keeps_api_key_when_forced(monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-secret")
-    env = claude_code_backend._build_subprocess_env(force_api_key=True)
-    assert env.get("ANTHROPIC_API_KEY") == "sk-secret"
 
 
 def test_build_subprocess_env_strips_third_party_routing(monkeypatch):
     monkeypatch.setenv("CLAUDE_CODE_USE_BEDROCK", "1")
     monkeypatch.setenv("CLAUDE_CODE_USE_VERTEX", "1")
-    env = claude_code_backend._build_subprocess_env(force_api_key=False)
+    env = claude_code_backend._build_subprocess_env()
     assert "CLAUDE_CODE_USE_BEDROCK" not in env
     assert "CLAUDE_CODE_USE_VERTEX" not in env
 
 
 def test_build_subprocess_env_strips_anthropic_auth_token(monkeypatch):
-    # ANTHROPIC_AUTH_TOKEN also flips the CLI into API mode — must be stripped.
     monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "token-xxx")
-    env = claude_code_backend._build_subprocess_env(force_api_key=False)
+    env = claude_code_backend._build_subprocess_env()
     assert "ANTHROPIC_AUTH_TOKEN" not in env
 
 
 def test_build_subprocess_env_forces_utf8_stdio(monkeypatch):
-    env = claude_code_backend._build_subprocess_env(force_api_key=False)
+    env = claude_code_backend._build_subprocess_env()
     assert env.get("PYTHONIOENCODING") == "utf-8"
     assert env.get("PYTHONUTF8") == "1"
 
