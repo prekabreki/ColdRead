@@ -9,15 +9,31 @@ name: Release
 
 on:
   push:
-    tags:
-      - "v*"
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: write        # needed to create the Release and upload assets
 
 jobs:
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ColdRead + test deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pytest
+      - name: Run tests
+        run: pytest tests/
+
   build:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
     name: Build ${{ matrix.os }} bundle
     runs-on: ${{ matrix.os }}
     strategy:
@@ -75,7 +91,7 @@ jobs:
 
   pypi:
     name: Publish to PyPI
-    needs: build
+    needs: [build, test]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
