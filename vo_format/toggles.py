@@ -154,8 +154,8 @@ TOGGLE_DEFINITIONS: list[dict[str, Any]] = [
         "name": "margins",
         "type": str,
         "default": "wide",
-        "choices": ["normal", "wide", "extra"],
-        "description": "Margin preset (normal=1\", wide=1.5\", extra=2\")",
+        "choices": ["normal", "wide", "extra", "narrow"],
+        "description": "Margin preset (narrow=0.8\", normal=1\", wide=1.5\", extra=2\")",
         "display_name": "Margins",
     },
 ]
