@@ -7,8 +7,6 @@ the analysis pipeline via their Claude Code subscription.
 
 Auth: the CLI prefers `ANTHROPIC_API_KEY` over OAuth credentials, so this
 module strips that env var before spawning so the subscription tokens are used.
-Pass `force_api_key=True` to keep the env var (useful when running headlessly
-with a credited API key but you still want the CLI transport).
 """
 
 from __future__ import annotations
@@ -113,24 +111,20 @@ _API_MODE_ENV_VARS_TO_STRIP: tuple[str, ...] = (
 )
 
 
-def _build_subprocess_env(force_api_key: bool) -> dict[str, str]:
+def _build_subprocess_env() -> dict[str, str]:
     """Build the environment for the subprocess.
 
-    By default we strip ANTHROPIC_API_KEY (and friends) so the CLI falls
-    back to the Claude.ai OAuth tokens stored in the keychain — that's the
-    whole point of this backend (the user is out of API credit). Set
-    force_api_key=True to keep the env vars.
+    Strips ANTHROPIC_API_KEY (and friends) so the CLI falls back to the
+    Claude.ai OAuth tokens stored in the keychain — that's the whole point
+    of this backend (the user is out of API credit).
 
     Also forces UTF-8 stdio so high-Unicode characters in scripts (em-dashes,
     accented glyphs, fantasy names) survive on Windows. Without this the CLI
     inherits cp1252 and the JSON it emits gets mojibake'd before we parse it.
     """
-    if force_api_key:
-        env = os.environ.copy()
-    else:
-        env = {
-            k: v for k, v in os.environ.items() if k not in _API_MODE_ENV_VARS_TO_STRIP
-        }
+    env = {
+        k: v for k, v in os.environ.items() if k not in _API_MODE_ENV_VARS_TO_STRIP
+    }
     env["PYTHONIOENCODING"] = "utf-8"
     env["PYTHONUTF8"] = "1"
     return env
@@ -162,7 +156,6 @@ def _invoke_claude_cli(
     *,
     model: str | None = None,
     timeout: int = DEFAULT_TIMEOUT_SEC,
-    force_api_key: bool = False,
 ) -> str:
     """Run the Claude CLI in --print mode and return the assistant's text.
 
@@ -174,7 +167,7 @@ def _invoke_claude_cli(
 
     _dbg("=" * 60)
     _dbg(f"_invoke_claude_cli: claude_bin={claude_bin!r}")
-    _dbg(f"  model={chosen_model!r}  timeout={timeout}s  force_api_key={force_api_key}")
+    _dbg(f"  model={chosen_model!r}  timeout={timeout}s")
     _dbg(f"  system_prompt_len={len(system_prompt)} chars  user_msg_len={len(user_message)} chars")
     _dbg(f"  sys.platform={sys.platform!r}  python={sys.executable!r}")
 
@@ -182,7 +175,7 @@ def _invoke_claude_cli(
     # CLAUDE.md, .claude/ settings, or project hooks belonging to whatever
     # cwd happened to call us. This keeps the analysis context clean and
     # avoids burning quota on project bootstrap hooks.
-    env = _build_subprocess_env(force_api_key)
+    env = _build_subprocess_env()
     creation_flags = _subprocess_creationflags()
     _dbg(f"  creation_flags=0x{creation_flags:08x}  env_size={len(env)}")
     _dbg(f"  env has ANTHROPIC_API_KEY={'ANTHROPIC_API_KEY' in env}  ANTHROPIC_AUTH_TOKEN={'ANTHROPIC_AUTH_TOKEN' in env}")
@@ -362,15 +355,13 @@ def run_preflight(
     api_key: str | None = None,  # accepted for signature parity; ignored
     model: str | None = None,
     *,
-    force_api_key: bool = False,
     timeout: int = DEFAULT_TIMEOUT_SEC,
 ) -> PreflightResult:
     """Run preflight analysis via the Claude Code CLI.
 
     Signature parity with `preflight.run_preflight` so the dispatcher can swap
     backends without rewriting call sites. `api_key` is accepted but ignored:
-    auth comes from the CLI's OAuth tokens (or the env API key if
-    force_api_key=True).
+    auth comes from the CLI's OAuth tokens.
     """
     line_count = script_text.count("\n") + 1
 
@@ -410,7 +401,6 @@ def run_preflight(
         user_message,
         model=model,
         timeout=timeout,
-        force_api_key=force_api_key,
     )
 
     data = _extract_json(response_text)
@@ -423,7 +413,6 @@ def run_pronunciation(
     api_key: str | None = None,
     model: str | None = None,
     *,
-    force_api_key: bool = False,
     timeout: int = DEFAULT_TIMEOUT_SEC,
 ) -> dict[str, str]:
     """Generate phonetic spellings via the Claude Code CLI.
@@ -452,7 +441,6 @@ def run_pronunciation(
             user_message,
             model=model,
             timeout=timeout,
-            force_api_key=force_api_key,
         )
     except PreflightError as e:
         log.warning("Pronunciation guide via Claude Code CLI failed: %s", e)
@@ -478,7 +466,6 @@ def run_diagnostic(
     api_key: str | None = None,
     model: str | None = None,
     *,
-    force_api_key: bool = False,
     timeout: int = DEFAULT_TIMEOUT_SEC,
 ) -> DiagnosticReport:
     """Run a diagnostic review via the Claude Code CLI.
@@ -538,7 +525,6 @@ def run_diagnostic(
             user_message,
             model=model,
             timeout=timeout,
-            force_api_key=force_api_key,
         )
     except PreflightError as e:
         return _empty_report(f"Diagnostic CLI call failed: {e}")
