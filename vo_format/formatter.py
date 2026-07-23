@@ -1539,8 +1539,26 @@ def _insert_breathing_marks(text: str) -> str:
     if len(text) < 40:
         return text
 
+    _ABBREV = frozenset({'Prof', 'Mrs', 'Mr', 'Ms', 'Dr', 'Sr', 'Jr', 'St', 'vs'})
+
+    def _maybe_breath(m: re.Match) -> str:
+        punct, = m.groups()
+        if punct in '!?':
+            return f'{punct} [breath] '
+        pos = m.start(1)
+        if pos == 0:
+            return m.group(0)
+        before = m.string[:pos]
+        for abbr in _ABBREV:
+            la = len(abbr)
+            if before.endswith(abbr) and (len(before) == la or not before[-la - 1].isalpha()):
+                return m.group(0)
+        if before[-1].isupper() and (len(before) == 1 or not before[-2].isalpha()):
+            return m.group(0)
+        return '. [breath] '
+
     # After ". " (sentence boundary) — but not abbreviations like "Mr. "
-    text = re.sub(r'([.!?])\s+(?=[A-Z])', r'\1 [breath] ', text)
+    text = re.sub(r'([.!?])\s+(?=[A-Z])', _maybe_breath, text)
 
     # After "; " or ": " (clause boundary)
     text = re.sub(r'([;:])\s+', r'\1 [breath] ', text)
