@@ -12,6 +12,8 @@ import anthropic
 
 log = logging.getLogger(__name__)
 
+API_TIMEOUT = 1200  # match the subprocess backend's default (seconds)
+
 from .models import (
     Archetype,
     CharacterInfo,
@@ -430,6 +432,7 @@ def run_preflight(
             temperature=0,
             system=PREFLIGHT_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_message}],
+            timeout=API_TIMEOUT,
         )
     except anthropic.APIConnectionError as e:
         raise APIConnectionError(f"Could not connect to Claude API: {e}") from e
@@ -513,6 +516,7 @@ def run_diagnostic(
             temperature=0,
             system=DIAGNOSTIC_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_message}],
+            timeout=API_TIMEOUT,
         )
     except (anthropic.APIConnectionError, anthropic.APIStatusError) as e:
         return DiagnosticReport(
@@ -617,6 +621,7 @@ def run_pronunciation(
             temperature=0,
             system=PRONUNCIATION_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_message}],
+            timeout=API_TIMEOUT,
         )
     except (anthropic.APIConnectionError, anthropic.APIStatusError) as e:
         log.warning("Pronunciation guide API call failed: %s", e)
