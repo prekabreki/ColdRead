@@ -393,6 +393,18 @@ def _display_diagnostic(report) -> None:
         console.print(f"  [yellow]Missed characters:[/yellow] {', '.join(report.missed_characters)}")
         console.print()
 
+    if report.missed_stage_directions:
+        console.print(f"  [yellow]Missed stage directions on lines:[/yellow] {', '.join(map(str, report.missed_stage_directions))}")
+        console.print()
+
+    if report.missed_sound_cues:
+        console.print(f"  [yellow]Missed sound cues on lines:[/yellow] {', '.join(map(str, report.missed_sound_cues))}")
+        console.print()
+
+    if report.unstripped_metadata:
+        console.print(f"  [yellow]Unstripped metadata on lines:[/yellow] {', '.join(map(str, report.unstripped_metadata))}")
+        console.print()
+
     if report.unhandled_patterns:
         console.print("  [yellow]Unhandled patterns:[/yellow]")
         for p in report.unhandled_patterns:
