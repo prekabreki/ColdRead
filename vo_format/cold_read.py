@@ -190,10 +190,6 @@ def wrap_cold_read(text: str, max_chars: int) -> str:
     num_lines = math.ceil(len(text) / max_chars)
     target = len(text) // num_lines
 
-    # Allow the break finder some flexibility around the target
-    min_target = int(target * 0.65)
-    max_target = min(int(target * 1.35), max_chars)
-
     lines: list[str] = []
     remaining = text
     lines_remaining = num_lines
