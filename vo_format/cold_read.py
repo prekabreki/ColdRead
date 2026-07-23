@@ -211,16 +211,17 @@ def wrap_cold_read(text: str, max_chars: int) -> str:
         lines.append(remaining.strip())
 
     # Orphan prevention: merge short lines with their neighbours
-    _fix_orphans(lines)
+    _fix_orphans(lines, max_chars)
 
     return "\n".join(lines)
 
 
-def _fix_orphans(lines: list[str]) -> None:
+def _fix_orphans(lines: list[str], max_chars: int) -> None:
     """Merge very short lines (<=2 words) with the previous line.
 
     Modifies *lines* in-place.  Works backwards so fixes don't cascade
-    upward unpredictably.
+    upward unpredictably.  Skips a merge if the resulting line would
+    exceed *max_chars*, preventing ReportLab re-wrapping.
     """
     for i in range(len(lines) - 1, 0, -1):
         words = lines[i].split()
@@ -228,8 +229,11 @@ def _fix_orphans(lines: list[str]) -> None:
             prev_words = lines[i - 1].split()
             if len(prev_words) >= 4:
                 pulled = prev_words.pop()
+                merged = pulled + " " + lines[i]
+                if len(merged) > max_chars:
+                    continue
                 lines[i - 1] = " ".join(prev_words)
-                lines[i] = pulled + " " + lines[i]
+                lines[i] = merged
 
 
 # ------------------------------------------------------------------
