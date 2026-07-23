@@ -79,6 +79,11 @@ def _find_api_key() -> str | None:
     return key if key else None
 
 
+def _snap_spacing(value: float) -> float:
+    """Snap a float to the nearest 0.25 increment."""
+    return round(value * 4) / 4
+
+
 # Display labels for the backend selector. The internal value is what the
 # `backend` dispatcher expects.
 _BACKEND_LABELS: dict[str, str] = {
@@ -441,7 +446,7 @@ class VOFormatterApp(_AppBase):
             var = customtkinter.DoubleVar(value=defn["default"])
 
             def _on_slider(value, lbl=val_label):
-                snapped = round(value * 4) / 4
+                snapped = _snap_spacing(value)
                 lbl.configure(text=f"{snapped:.2f}")
                 self._on_toggle_changed()
 
@@ -1124,7 +1129,7 @@ class VOFormatterApp(_AppBase):
                 setattr(toggles, name, val)
             elif defn["type"] is float:
                 raw = var.get()
-                snapped = round(raw * 4) / 4
+                snapped = _snap_spacing(raw)
                 setattr(toggles, name, snapped)
             elif defn["type"] is int and "choices" in defn:
                 setattr(toggles, name, int(var.get()))
