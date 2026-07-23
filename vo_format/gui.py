@@ -5,7 +5,6 @@ from __future__ import annotations
 import dataclasses
 import logging
 import os
-import sys
 import tempfile
 import threading
 import tkinter as tk
