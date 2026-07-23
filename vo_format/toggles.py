@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import typing
 from dataclasses import fields
+from enum import Enum
 from typing import Any
 
 from .models import (
@@ -12,6 +14,14 @@ from .models import (
     NarratorStyle,
     QuotedTextStyle,
 )
+
+
+# Resolve PEP 563 string annotations to actual types for FormatToggles fields.
+_FIELD_TYPE_MAP: dict[str, type] = {}
+try:
+    _FIELD_TYPE_MAP.update(typing.get_type_hints(FormatToggles))
+except Exception:
+    pass
 
 # ---------------------------------------------------------------------------
 # Toggle metadata — drives CLI flag generation and interactive display
@@ -207,23 +217,35 @@ ARCHETYPE_DEFAULTS: dict[Archetype, dict[str, Any]] = {
 
 def coerce_value(name: str, value: Any) -> Any:
     """Coerce a raw value to the appropriate type for a toggle field."""
-    field_type = {f.name: f.type for f in fields(FormatToggles)}.get(name)
+    field_type = _FIELD_TYPE_MAP.get(name)
     if field_type is None:
         return value
 
-    # Handle enum types
-    if field_type == NarratorStyle or field_type == "NarratorStyle":
+    # Enum types: convert string to enum member
+    if isinstance(field_type, type) and issubclass(field_type, Enum):
         if isinstance(value, str):
-            return NarratorStyle(value)
+            return field_type(value)
         return value
-    if field_type == QuotedTextStyle or field_type == "QuotedTextStyle":
+
+    # Bool: handle string representations and coerce from int/None
+    if field_type is bool:
         if isinstance(value, str):
-            return QuotedTextStyle(value)
-        return value
-    if field_type == MarginPreset or field_type == "MarginPreset":
-        if isinstance(value, str):
-            return MarginPreset(value)
-        return value
+            return value.lower() in ("true", "1", "yes")
+        return bool(value)
+
+    # Int: coerce from string or float
+    if field_type is int and not isinstance(value, int):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return value
+
+    # Float: coerce from string or int
+    if field_type is float and not isinstance(value, float):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return value
 
     return value
 
