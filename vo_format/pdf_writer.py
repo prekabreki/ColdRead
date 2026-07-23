@@ -596,26 +596,26 @@ def generate_pdf(
     styles = _build_styles(toggles)
     flowables: list[Flowable] = []
 
-    # Process blocks, handling KeepTogether for character_name + next block
+    # Process blocks, grouping consecutive keep_with_next chains into
+    # a single KeepTogether so a 3-block run (name->line->line) won't split.
     i = 0
     while i < len(blocks):
-        block = blocks[i]
-        block_flowables = _block_to_flowables(block, styles, toggles)
-
-        if block.keep_with_next and i + 1 < len(blocks):
-            # Group this block with the next one to prevent page break between them
-            next_block = blocks[i + 1]
-            next_flowables = _block_to_flowables(next_block, styles, toggles)
-            # Only use KeepTogether if neither is a page break
-            if (
-                block.block_type != BlockType.PAGE_BREAK
-                and next_block.block_type != BlockType.PAGE_BREAK
+        if blocks[i].keep_with_next and i + 1 < len(blocks):
+            j = i + 1
+            while j < len(blocks) and blocks[j - 1].keep_with_next:
+                j += 1
+            chain = blocks[i:j]
+            if all(
+                b.block_type != BlockType.PAGE_BREAK for b in chain
             ):
-                flowables.append(KeepTogether(block_flowables + next_flowables))
-                i += 2
+                chain_flowables = []
+                for b in chain:
+                    chain_flowables.extend(_block_to_flowables(b, styles, toggles))
+                flowables.append(KeepTogether(chain_flowables))
+                i = j
                 continue
 
-        flowables.extend(block_flowables)
+        flowables.extend(_block_to_flowables(blocks[i], styles, toggles))
         i += 1
 
     doc.build(flowables)
