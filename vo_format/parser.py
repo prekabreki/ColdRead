@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import warnings
 
 # Upper bounds to prevent OOM from adversarial or malformed input files.
 MAX_FILE_BYTES = 50 * 1024 * 1024   # 50 MB on disk
@@ -89,18 +90,18 @@ def extract_text(file_path: str) -> tuple[str, str]:
     elif ext == ".docx":
         raw_text = _extract_docx(file_path)
     elif ext in (".txt", ".md"):
-        # Try UTF-8 first, fall back to latin-1
         for encoding in ("utf-8-sig", "utf-8", "latin-1"):
             try:
                 with open(file_path, "r", encoding=encoding) as f:
                     raw_text = f.read()
+                if encoding == "latin-1":
+                    warnings.warn(
+                        f"File {file_path} could not be decoded as UTF-8; "
+                        "falling back to latin-1. Text may be garbled."
+                    )
                 break
             except UnicodeDecodeError:
                 continue
-        else:
-            # Last resort: replace errors
-            with open(file_path, "r", encoding="utf-8", errors="replace") as f:
-                raw_text = f.read()
     else:
         raise ValueError(
             f"Unsupported file type '{ext}'. "
