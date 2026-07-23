@@ -284,18 +284,12 @@ def resolve_toggles(
         else:
             log.debug("Unknown archetype default toggle '%s' — skipping", key)
 
-    # Apply preflight suggestions (map spec toggle names to our field names)
-    toggle_name_map = {
-        "color_code_characters": "color_characters",
-        "add_section_breaks": "section_breaks",
-        "mark_stage_directions": "stage_directions",
-    }
+    # Apply preflight suggestions
     for key, value in preflight_suggestions.items():
-        mapped_key = toggle_name_map.get(key, key)
-        if hasattr(toggles, mapped_key):
-            setattr(toggles, mapped_key, coerce_value(mapped_key, value))
+        if hasattr(toggles, key):
+            setattr(toggles, key, coerce_value(key, value))
         else:
-            log.debug("Unknown preflight suggestion '%s' (mapped to '%s') — skipping", key, mapped_key)
+            log.debug("Unknown preflight suggestion '%s' — skipping", key)
 
     # Apply CLI overrides (highest priority)
     for key, value in cli_overrides.items():
