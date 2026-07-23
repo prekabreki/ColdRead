@@ -127,7 +127,6 @@ class VOFormatterApp(_AppBase):
         self.file_type: str | None = None
         self.preflight_result: PreflightResult | None = None
         self.color_map: dict[str, str] = {}
-        self.blocks = None
         self.toggle_widgets: dict[str, any] = {}
         self.toggle_vars: dict[str, any] = {}
         self.toggle_value_labels: dict[str, customtkinter.CTkLabel] = {}
@@ -1063,7 +1062,6 @@ class VOFormatterApp(_AppBase):
         self.preflight_result = None
         self.raw_text = None
         self.normalized_text = None
-        self.blocks = None
         self.color_map = {}
         self._has_preflight_data = False
 
@@ -1775,7 +1773,6 @@ class VOFormatterApp(_AppBase):
                     pronunciation_guide=pronunciation_guide or None,
                 )
                 blocks = VOFormatterApp._wrap_with_intro_outro(blocks, intro_blocks, outro_blocks)
-                self.blocks = blocks
 
                 tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
                 tmp_path = tmp.name
@@ -1884,7 +1881,6 @@ class VOFormatterApp(_AppBase):
                     pronunciation_guide=pronunciation_guide or None,
                 )
                 blocks = VOFormatterApp._wrap_with_intro_outro(blocks, intro_blocks, outro_blocks)
-                self.blocks = blocks
 
                 os.makedirs(output_folder, exist_ok=True)
                 result_path = generate_pdf(blocks, output_path, toggles)
