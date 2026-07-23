@@ -29,6 +29,9 @@ dependencies = [
     "CTkToolTip>=0.8",
 ]
 
+[project.optional-dependencies]
+dev = ["ruff", "mypy"]
+
 [project.urls]
 Homepage = "https://github.com/prekabreki/ColdRead"
 Repository = "https://github.com/prekabreki/ColdRead"
@@ -45,3 +48,12 @@ packages = ["vo_format"]
 
 [tool.setuptools.package-data]
 vo_format = ["samples/*.md"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+lint.select = ["E", "F", "I"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
