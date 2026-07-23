@@ -1648,8 +1648,6 @@ def _batch_by_voice(
     gets a header block with the character name and batch number.
     Characters are ordered by line count (most lines first).
     """
-    from collections import OrderedDict
-
     # Collect speaker groups: {speaker_name: [blocks]}
     # Preserve insertion order by line count (most lines first)
     sorted_chars = sorted(preflight.characters, key=lambda c: c.line_count, reverse=True)
