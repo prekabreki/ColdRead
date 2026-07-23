@@ -43,9 +43,16 @@ There is no linter config or CI — don't invent commands for them. For integrat
 - `--list-samples` — print paths of bundled sample scripts
 - Toggle flags follow `--flag` / `--no-flag` pairs (see `vo_format/cli.py:92-117`)
 
-### API key
+### API key / model pinning
 
-The preflight, pronunciation, and diagnostic calls all need `ANTHROPIC_API_KEY` in env (or `--api-key`). No file-based key fallback — don't add one. The model is pinned to `claude-sonnet-4-5-20250929` (see `preflight.py`); update there if migrating.
+Model and auth differ by backend (see `--backend`):
+
+| Backend | Auth | Model | Override |
+|---|---|---|---|
+| `api` | `ANTHROPIC_API_KEY` env or `--api-key` | `claude-sonnet-4-5-20250929` (pinned in `preflight.py` + `backend.py`) | Edit the source |
+| `claude-code` | OAuth subscription (strips `ANTHROPIC_API_KEY` before spawning `claude`) | `sonnet` (`DEFAULT_MODEL` in `claude_code_backend.py`) | `VO_FORMAT_CLAUDE_CODE_MODEL` env var |
+
+No file-based key fallback — don't add one.
 
 ## Architecture
 
