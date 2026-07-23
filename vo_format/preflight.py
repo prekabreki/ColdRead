@@ -226,11 +226,21 @@ def _extract_json(text: str) -> dict[str, Any]:
     """Extract and parse JSON from API response text.
 
     Tries direct parsing first, then looks for JSON within markdown fences.
+    Raises JSONParseError if the result is not a JSON object (dict).
     """
-    # Try direct parse
     text = text.strip()
+
+    def _parse(raw: str) -> dict[str, Any]:
+        result = json.loads(raw)
+        if not isinstance(result, dict):
+            raise JSONParseError(
+                f"Expected JSON object (dict), got {type(result).__name__}"
+            )
+        return result
+
+    # Try direct parse
     try:
-        return json.loads(text)
+        return _parse(text)
     except json.JSONDecodeError:
         pass
 
@@ -238,7 +248,7 @@ def _extract_json(text: str) -> dict[str, Any]:
     match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", text, re.DOTALL)
     if match:
         try:
-            return json.loads(match.group(1).strip())
+            return _parse(match.group(1).strip())
         except json.JSONDecodeError:
             pass
 
@@ -247,7 +257,7 @@ def _extract_json(text: str) -> dict[str, Any]:
     brace_end = text.rfind("}")
     if brace_start != -1 and brace_end != -1 and brace_end > brace_start:
         try:
-            return json.loads(text[brace_start : brace_end + 1])
+            return _parse(text[brace_start : brace_end + 1])
         except json.JSONDecodeError:
             pass
 
