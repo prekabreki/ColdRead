@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Optional
+from typing import Callable, Optional
 
 from .colors import (
     NARRATOR_COLOR,
@@ -115,17 +115,6 @@ RE_DOC_REF = re.compile(r"^Document Reference:\s*(.+)", re.IGNORECASE)
 # "FROM: name TO: name" email header
 RE_EMAIL_HEADER = re.compile(r"^FROM:\s*(.+)", re.IGNORECASE)
 
-# "LAZARUS UNAUTHORIZED TRANSMISSION - LAZ_NNN"
-RE_TRANSMISSION = re.compile(
-    r"^([A-Z][A-Z\s]+(?:UNAUTHORIZED\s+)?TRANSMISSION)\s*[-\u2014]\s*(\S+)", re.IGNORECASE
-)
-
-# "PICUS NEWS NETWORK TRANSCRIPT" or similar broadcast labels
-RE_BROADCAST = re.compile(
-    r"^([A-Z][A-Z\s]+(?:NEWS|BROADCAST|RADIO)[A-Z\s]*(?:TRANSCRIPT|REPORT|BULLETIN))\s*$",
-    re.IGNORECASE,
-)
-
 # "News Ticker: text..."
 RE_NEWS_TICKER = re.compile(r"^News Ticker:\s*(.+)", re.IGNORECASE)
 
@@ -137,12 +126,6 @@ RE_PLAIN_STAGE_DIRECTION = re.compile(r"^\[([^\]]+)\]$")
 
 # Plain-text sound cue: [ALL CAPS TEXT] or [Sound of ...]
 RE_PLAIN_SOUND_CUE = re.compile(r"^\[(Sound of .+|[A-Z][A-Z\s.,;:'\-]+)\]$")
-
-# All-caps org header: "SARIF INDUSTRIES - COMPANY OVERVIEW"
-RE_ORG_HEADER = re.compile(
-    r"^([A-Z][A-Z\s]+(?:INDUSTRIES|ASSOCIATES|CORPORATION|CORP))\s*[-\u2014]\s*(.+)"
-)
-
 
 # ---------------------------------------------------------------------------
 # Metadata stripping
@@ -177,12 +160,9 @@ def _strip_metadata_blocks(
 
 # Each entry: (compiled_regex, source_type_str, label_format_fn)
 # label_format_fn takes the match object and returns the display label string.
-_HARDCODED_SOURCE_PATTERNS: list[tuple[re.Pattern, str, object]] = [
+_HARDCODED_SOURCE_PATTERNS: list[tuple[re.Pattern, str, Callable[[re.Match], str]]] = [
     (RE_DOC_ARCHIVE_SECTION, "document_section", lambda m: f"Document Archive Section {m.group(1)}: {m.group(2)}"),
     (RE_DOC_ARCHIVE_CODE, "document_archive", lambda m: f"Document Archive {m.group(1)}: {m.group(2)}"),
-    (RE_TRANSMISSION, "transmission", lambda m: f"{m.group(1)} - {m.group(2)}"),
-    (RE_BROADCAST, "broadcast", lambda m: m.group(1).strip()),
-    (RE_ORG_HEADER, "corporate_document", lambda m: f"{m.group(1).strip()} - {m.group(2).strip()}"),
     (RE_EMAIL_HEADER, "email", lambda m: m.group(0).strip()),
     (RE_NEWS_TICKER, "news_ticker", lambda m: "News Ticker"),
     (RE_NARRATIVE_LABEL, "narrative_label", lambda m: m.group(0).strip()),
@@ -191,7 +171,7 @@ _HARDCODED_SOURCE_PATTERNS: list[tuple[re.Pattern, str, object]] = [
 
 def _compile_source_patterns(
     source_types: list,
-) -> list[tuple[re.Pattern, str, object]]:
+) -> list[tuple[re.Pattern, str, Callable[[re.Match], str]]]:
     """Build source label patterns from preflight source_types + hardcoded patterns.
 
     Returns list of (pattern, source_type_str, label_fn) sorted longest-prefix first.
@@ -214,7 +194,7 @@ def _compile_source_patterns(
 
 def _match_source_label(
     line: str,
-    patterns: list[tuple[re.Pattern, str, object]],
+    patterns: list[tuple[re.Pattern, str, Callable[[re.Match], str]]],
 ) -> tuple[str, str] | None:
     """Check if a line matches any source label pattern.
 
