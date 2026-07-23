@@ -466,8 +466,6 @@ def run_diagnostic(
     This is a second API call (opt-in via --diagnose) that identifies
     misclassified lines and formatting issues.
     """
-    key = _get_api_key(api_key)
-
     # Build block classification list
     classifications = []
     for block in formatted_blocks:
@@ -507,6 +505,7 @@ def run_diagnostic(
     )
 
     try:
+        key = _get_api_key(api_key)
         client = anthropic.Anthropic(api_key=key)
         response = client.messages.create(
             model=model,
