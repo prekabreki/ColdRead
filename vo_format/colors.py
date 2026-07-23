@@ -24,7 +24,6 @@ SOUND_CUE_COLOR = "#9CA3AF"
 
 def assign_colors(
     characters: list[CharacterInfo],
-    has_narrator: bool,
 ) -> dict[str, str]:
     """Assign colors to characters based on line count.
 
@@ -50,8 +49,8 @@ def assign_colors(
         else:
             speakers.append(char)
 
-    # If has_narrator is True but no character is explicitly named "Narrator",
-    # the narrator role is handled implicitly (text without speaker attribution).
+    # The narrator role may be handled implicitly (text without speaker
+    # attribution) even when no character is explicitly named "Narrator".
     for n in narrators:
         color_map[n.name] = NARRATOR_COLOR
 

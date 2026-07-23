@@ -1621,7 +1621,7 @@ class VOFormatterApp(_AppBase):
         self.preflight_progress.pack_forget()
         self.analyze_btn.configure(state="normal", text="Re-analyze")
         self.preflight_result = result
-        self.color_map = assign_colors(result.characters, result.has_narrator)
+        self.color_map = assign_colors(result.characters)
         self._has_preflight_data = True
 
         # Cache against the text the preflight was actually run on, not whatever
