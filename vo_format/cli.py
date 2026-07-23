@@ -471,7 +471,7 @@ def main() -> None:
 
     normalized = normalize_text(raw_text)
     filename = os.path.basename(args.script_file)
-    line_count = normalized.count("\n") + 1
+    line_count = normalized.rstrip("\n").count("\n") + 1
     console.print(f"  Read {filename} ({line_count} lines, .{file_type})")
 
     # Step 2: Preflight or defaults
