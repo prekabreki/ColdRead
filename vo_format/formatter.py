@@ -1618,7 +1618,7 @@ def _convert_pause_notation(text: str) -> str:
 def _apply_post_processing(
     blocks: list[FormattedBlock],
     toggles: FormatToggles,
-) -> list[FormattedBlock]:
+) -> None:
     """Apply breathing marks and pause notation to text blocks."""
     for block in blocks:
         if block.block_type not in _TEXT_BLOCK_TYPES:
@@ -1630,8 +1630,6 @@ def _apply_post_processing(
             block.text = _insert_breathing_marks(block.text)
         if toggles.pause_notation:
             block.text = _convert_pause_notation(block.text)
-
-    return blocks
 
 
 # ---------------------------------------------------------------------------
@@ -1909,7 +1907,7 @@ def format_script(
 
     # Post-processing: breathing marks and pause notation
     if toggles.breathing_marks or toggles.pause_notation:
-        result = _apply_post_processing(result, toggles)
+        _apply_post_processing(result, toggles)
 
     # Pronunciation hints
     if pronunciation_guide:
