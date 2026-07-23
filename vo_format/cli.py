@@ -589,7 +589,8 @@ def main() -> None:
         console.print("\n  Running diagnostic review...")
 
         # Save debug JSON
-        debug_path = output_path.replace(".pdf", "_debug.json")
+        stem, _ = os.path.splitext(output_path)
+        debug_path = f"{stem}_debug.json"
         debug_data = {
             "preflight": {
                 "archetype": preflight.archetype.value,
