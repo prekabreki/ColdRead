@@ -64,7 +64,7 @@ RE_BOLD_CHARACTER = re.compile(
 
 # CHARACTER_NAME: (plain text, all-caps name with colon)
 RE_PLAIN_CHARACTER = re.compile(
-    r"^([A-Z][A-Z0-9\s''()\-]+?):\s+(.*)"
+    r"^([A-Z][A-Z0-9\s''()\-]+?):\s*(.*)"
 )
 
 # Stage direction: *(text)* or *(text)*  (italic parenthetical)
