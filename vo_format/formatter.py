@@ -1632,7 +1632,7 @@ def _attach_pronunciation_hints(
         if not block.text:
             continue
         for word, phonetic in pronunciation_guide.items():
-            if word in block.text and f"{word} = {phonetic}" not in block.pronunciation_hints:
+            if re.search(rf"\b{re.escape(word)}\b", block.text) and f"{word} = {phonetic}" not in block.pronunciation_hints:
                 block.pronunciation_hints.append(f"{word} = {phonetic}")
 
 
