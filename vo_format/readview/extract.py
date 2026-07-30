@@ -21,7 +21,16 @@ COURIER_ADVANCE_RATIO = 0.6
 
 # A vertical gap this much larger than the document's normal leading is treated
 # as a blank line rather than ordinary line spacing.
-PARAGRAPH_GAP_FACTOR = 1.5
+#
+# 1.2 is deliberately not a round number: it sits between two measured
+# extremes and must stay between them. Ordinary line-to-line leading measures
+# ~1.0x (0.83-0.97x at outlier font sizes where the line above/below changes
+# size). A real BLANK_LINE-induced paragraph gap measures 1.385x-1.5x (1.385x
+# on a synthetic 16pt fixture, exactly 1.5x on real 12pt "--margins narrow"
+# production PDFs). A threshold of 1.5 sits exactly on the production ratio
+# and, being compared with strict `>`, misses every real paragraph break —
+# do not raise this back toward 1.5 without re-measuring both extremes.
+PARAGRAPH_GAP_FACTOR = 1.2
 
 # PyMuPDF span flag bits.
 _FLAG_ITALIC = 1 << 1

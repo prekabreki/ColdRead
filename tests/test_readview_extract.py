@@ -63,6 +63,18 @@ class TestRoundTrip:
 
         datetime.fromisoformat(extract_lines(pdf_path).derived)
 
+    def test_paragraph_breaks_are_detected_in_a_real_script(self, sample_pdf) -> None:
+        """Zero gap_before across a whole script means detection is broken.
+
+        The threshold was originally 1.5, which exactly equalled the paragraph
+        gap ratio in production PDFs and so detected nothing. Only the synthetic
+        fixture caught it; this guards the real proportions.
+        """
+        pdf_path, _ = sample_pdf(Archetype.CONTINUOUS_PROSE)
+        script = extract_lines(pdf_path)
+        gaps = sum(1 for line in script.lines if line.gap_before)
+        assert gaps > 0, "no paragraph break detected in an entire prose script"
+
 
 class TestStyleFidelity:
     def test_colors_round_trip(self, blocks_pdf) -> None:
