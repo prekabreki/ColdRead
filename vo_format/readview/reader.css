@@ -82,7 +82,7 @@ body {
   gap: 14px;
   align-items: center;
   justify-content: center;
-  padding: 10px 12px;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom)) 12px;
   background: var(--bg);
   border-top: 1px solid var(--chrome);
   font-size: 15px;
@@ -97,6 +97,7 @@ body {
   border-radius: 6px;
   padding: 8px 12px;
   min-width: 44px;              /* Apple's minimum comfortable touch target */
+  min-height: 44px;
   -webkit-tap-highlight-color: transparent;
 }
 
