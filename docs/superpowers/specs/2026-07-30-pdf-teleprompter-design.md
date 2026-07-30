@@ -71,9 +71,21 @@ stdlib may be imported there.
 - **No OOM risk** next to the house's DNS.
 
 The rendered file is the transport, not a second delivery path — there is one
-renderer and one artifact. That it also syncs to the iPad through OneDrive and
-opens with no server at all is a side effect, and it is what makes Phase 1
-below possible.
+renderer and one artifact.
+
+> **Corrected 2026-07-30, on device.** This section originally claimed the file
+> "also syncs to the iPad through OneDrive and opens with no server at all", and
+> that this made a server-free Phase 1 possible. **That is false.** iOS treats a
+> local `.html` as a document to *preview*, not a page to run, so the file never
+> renders as a teleprompter from Files or the OneDrive app. The server is
+> therefore the **delivery path, not a Phase 2 convenience** — the artifact is
+> still the transport, but it has to be transported over HTTP.
+>
+> Two consequences worth keeping: serving over HTTP restores `localStorage`
+> (Safari blocks it for `file://` origins), so scroll position, wpm and font size
+> now persist, which the file path could never have done. And the offline
+> fallback reverts to what it always was in practice — reading the PDF in a PDF
+> app, exactly as before this feature existed.
 
 ## Components
 
@@ -231,15 +243,31 @@ is plain HTTP on a LAN address. So `navigator.wakeLock` will be **undefined in
 both Phase 1 and Phase 2**, and a design that relied on it would fail in the
 booth, not in testing.
 
+> **Measured on device 2026-07-30: layer 1 below FAILED.** The screen turned off
+> inside two minutes. The muted-video technique does not hold this iPad awake, so
+> the ordering below is wrong — **`tailscale serve` HTTPS is promoted from "a
+> future upgrade" to a Phase 2 requirement**, because it is the only route that
+> makes the real API available. Layer 3 is the current answer.
+>
+> One untested hypothesis before writing the video off entirely: `reader.css`
+> sets `#awake { opacity: 0 }`, and iOS is known to discount playback of a video
+> it treats as non-visible. NoSleep.js, the source of this technique, does not
+> zero opacity. Worth one attempt at a near-zero-but-nonzero value; note the
+> autoplay path is *not* the problem, since `play()` already runs inside the
+> play-button gesture.
+
 Three layers, in order:
 
 1. **A muted, looping, 1-frame inline `<video>`** playing while scrolling. This
    is the long-standing iOS keep-awake mechanism and it needs no secure context.
-   The video is a data URI, so self-containment holds.
+   The video is a data URI, so self-containment holds. **Verified not to work on
+   the owner's iOS version — see the note above.**
 2. **`navigator.wakeLock` when it exists**, used in preference to the video.
-   It becomes available if the page is ever served over real HTTPS — notably
-   `tailscale serve`, which issues a genuine certificate for the tailnet
-   hostname. Worth knowing as a future upgrade, not a Phase 2 requirement.
+   It becomes available once the page is served over real HTTPS — notably
+   `tailscale serve`, which issues a genuine Let's Encrypt certificate for the
+   tailnet hostname, and the Pi is already a tailnet node. **This is now the
+   intended fix, not an optional upgrade**, and it also makes the library
+   reachable off-LAN.
 3. **Documented fallback:** iPad Settings → Display & Brightness → Auto-Lock →
    Never. Zero code, and the thing to reach for if layers 1 and 2 both
    disappoint on a given iOS version.
@@ -391,22 +419,41 @@ Reading PDFs makes a real round-trip test available:
 
 ## Build order
 
-Phased so the first phase is usable in a booth on its own, with no server, no
-token, and no network surface at all.
+> **Amended 2026-07-30 after the first real session.** The phasing below was built
+> on the premise that Phase 1 is "usable in a booth on its own, with no server" —
+> and that premise is **false**. iOS will not run a local `.html`, so Phase 1's
+> artifact is undeliverable to the device it was designed for. Phase 1 shipped and
+> is field-validated, but **only because a server was stood up to reach it.** A
+> reader planning further work should treat the server as part of the minimum
+> viable product, not as Phase 2.
 
-**Phase 1 — read it tonight.** `extract.py`, `render.py`,
-`coldread-readview`, and their tests. The HTML lands in the OneDrive `ready/`
-folders, syncs to the iPad on its own, and opens from Files. Full teleprompter:
-auto-scroll, touch and keyboard control, keep-awake via the video layer, font
-size, dark mode. No server exists yet, so none of the security surface does
-either. Known Phase 1 limitation: preferences do not persist across reloads,
-because Safari blocks `localStorage` on `file://`.
+**Phase 1 — the renderer. SHIPPED, field-validated 2026-07-30.** `extract.py`,
+`render.py`, `theme.py`, `reader.css`, `reader.js`, `coldread-readview`, and
+their tests (183 passing). Confirmed working on device: the library index,
+tap-through, auto-scroll, hold-to-freeze / drag / release, font resize, the
+light/dark toggle, and wpm control with hold-to-accelerate. **Not** confirmed:
+keep-awake, which failed — see the note in the keep-awake section.
 
-**Phase 2 — the Pi.** `serve.py`, the index, token auth, the security checks,
-and the rsync line. Turns "find the file in OneDrive" into "tap a bookmark".
+The Phase 1 delivery assumption that failed: the HTML lands in the OneDrive
+`ready/` folders and syncs to the iPad, but **Files and the OneDrive app preview
+it rather than running it**, so it never becomes a teleprompter. Delivery
+required an HTTP server. That reverses the stated `localStorage` limitation too —
+served over HTTP the page has a real origin, so preferences and scroll position
+*do* persist.
+
+**Phase 2 — the Pi, and now the critical path rather than a convenience.**
+`serve.py`, the index, token auth, the security checks, and the rsync line. Two
+additions forced by the first session: it must be reachable over **`tailscale
+serve` HTTPS**, because that is what makes `navigator.wakeLock` available and the
+video fallback does not work; and it replaces the throwaway `http.server` that
+currently stands in for it.
 
 **Phase 3 — polish, driven by actual booth use.** Deliberately unspecified;
-the first two recording sessions decide what belongs here.
+the first two recording sessions decide what belongs here. Two candidates already
+banked from session one: the `−`/`+` edge strips at `opacity: 0.22` proved
+**undiscoverable** (mitigated by adding labelled buttons to the HUD, but the
+strips themselves are still invisible), and the title renders twice — once as the
+generated heading and once as the PDF's own title-page line.
 
 ## Reversals
 
