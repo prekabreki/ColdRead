@@ -139,6 +139,14 @@ Three derivations are where fidelity is won or lost:
   materially larger than normal leading was a blank line. Without it, 1030
   breath groups collapse into an undifferentiated wall.
 
+  "Materially larger" is **1.2×**, and the value is load-bearing rather than
+  taste. Measured 2026-07-30: ordinary leading is 1.0×, while blank-line gaps are
+  1.385× at 16pt and **exactly 1.500× in the 12pt production PDFs**. The obvious
+  threshold of 1.5 therefore lands precisely *on* the production ratio, and under
+  a strict `>` comparison it detects zero paragraph breaks in real content — a
+  wall of text, silently, with a green test suite. Any future change to this
+  number must re-measure both extremes.
+
 ## Rendering
 
 One HTML file per script. All CSS and JS inline. Zero network requests after
