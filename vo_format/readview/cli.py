@@ -44,10 +44,18 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="re-render even when the existing HTML is newer than its PDF",
     )
+    parser.add_argument(
+        "--library",
+        metavar="HREF",
+        help=(
+            "add a 'Library' button linking to HREF (e.g. index.html). Off by "
+            "default: a lone read-view has no library to return to"
+        ),
+    )
     return parser
 
 
-def _convert(pdf: Path, force: bool) -> None:
+def _convert(pdf: Path, force: bool, library: str | None = None) -> None:
     """Convert one PDF. Raises ReadViewError on any failure."""
     if not pdf.is_file():
         raise ReadViewError(f"{pdf}: not a file")
@@ -62,7 +70,7 @@ def _convert(pdf: Path, force: bool) -> None:
 
     script = extract_lines(pdf)
     try:
-        out.write_text(render(script), encoding="utf-8")
+        out.write_text(render(script, library=library), encoding="utf-8")
     except OSError as exc:
         raise ReadViewError(f"{out.name}: could not write ({exc})") from exc
     # The canary: line count tracks the script, so a three-digit drop is
@@ -83,7 +91,7 @@ def main(argv: list[str] | None = None) -> int:
     failures = 0
     for pdf in args.pdfs:
         try:
-            _convert(pdf, force=args.force)
+            _convert(pdf, force=args.force, library=args.library)
         except ReadViewError as exc:
             failures += 1
             print(f"error: {exc}", file=sys.stderr)

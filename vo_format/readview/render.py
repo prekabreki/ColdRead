@@ -69,13 +69,29 @@ def _line_html(line: ReadLine) -> str:
     return f'<p class="{" ".join(classes)}"{attrs}>{escape(line.text)}</p>'
 
 
-def render(script: ReadScript) -> str:
-    """Render `script` as one self-contained HTML document."""
+def render(script: ReadScript, library: str | None = None) -> str:
+    """Render `script` as one self-contained HTML document.
+
+    `library` is the href of a library index to offer a way back to. It is
+    opt-in because a read-view knows nothing about a library: the index is
+    built by whatever publishes these pages, so defaulting the button on would
+    ship a dead link to everyone converting a single PDF on their own machine.
+    """
     title = escape(script.title)
     display, variant = _split_variant(script.title)
     display = escape(display)
     variant_suffix = f" &middot; {variant} cut" if variant else ""
     lines = "\n".join(_line_html(line) for line in script.lines)
+    # The button lives in #hud on purpose. The touch handler already exempts
+    # #hud from the freeze-and-drag gesture, so a control placed anywhere else
+    # would scrub the script under the finger on its way out.
+    library_attr = f' data-library="{escape(library)}"' if library else ""
+    back_button = (
+        '<button id="back" type="button" aria-label="Back to library">'
+        "&larr; Library</button>\n"
+        if library
+        else ""
+    )
     return f"""<!doctype html>
 <html lang="en" data-theme="dark">
 <head>
@@ -89,7 +105,8 @@ maximum-scale=1, viewport-fit=cover">
 {_asset("reader.css")}
 </style>
 </head>
-<body data-words-per-line="{script.words_per_line:.1f}" data-title="{title}">
+<body data-words-per-line="{script.words_per_line:.1f}" data-title="{title}"\
+{library_attr}>
 <div class="zone" id="slower">&minus;</div>
 <div class="zone" id="faster">+</div>
 <div id="script">
@@ -99,7 +116,7 @@ maximum-scale=1, viewport-fit=cover">
 {lines}
 </div>
 <div id="hud">
-<button id="smaller" type="button" aria-label="Smaller text">A&minus;</button>
+{back_button}<button id="smaller" type="button" aria-label="Smaller text">A&minus;</button>
 <button id="bigger" type="button" aria-label="Larger text">A+</button>
 <button id="play" type="button" aria-label="Play or pause">&#9654;</button>
 <button id="wpmdown" type="button" aria-label="Slower">&minus;</button>

@@ -127,3 +127,17 @@ class TestFailsLoudly:
 
     def test_no_arguments_exits_nonzero(self) -> None:
         assert main([]) != 0
+
+
+class TestLibraryFlag:
+    def test_no_button_without_the_flag(self, sample_pdf) -> None:
+        pdf_path, _ = sample_pdf(Archetype.SINGLE_NARRATOR)
+        assert main([str(pdf_path)]) == 0
+        assert 'id="back"' not in readview_path_for(pdf_path).read_text("utf-8")
+
+    def test_flag_threads_through_to_the_page(self, sample_pdf) -> None:
+        pdf_path, _ = sample_pdf(Archetype.SINGLE_NARRATOR)
+        assert main([str(pdf_path), "--library", "index.html"]) == 0
+        html = readview_path_for(pdf_path).read_text("utf-8")
+        assert 'data-library="index.html"' in html
+        assert 'id="back"' in html

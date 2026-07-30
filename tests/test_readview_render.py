@@ -167,18 +167,42 @@ class TestReaderContract:
     the results, so ONE missing id throws and kills the whole script — leaving a
     static page with no controls and no scrolling, and no visible error.
     Deriving the list from reader.js itself keeps the two sides from drifting.
+
+    One id is exempt: `back` renders only under --library. What makes that safe
+    is the `if (el.back)` guard, so the exemption is earned by verifying the
+    guard exists rather than by trusting the list below.
     """
 
-    def test_every_id_reader_js_requires_is_rendered(self) -> None:
+    #: ids reader.js looks up but guards before touching.
+    OPTIONAL = {"back"}
+
+    @staticmethod
+    def _js() -> str:
         from importlib.resources import files
 
-        js = (files("vo_format.readview") / "reader.js").read_text(encoding="utf-8")
-        required = set(re.findall(r'getElementById\("([^"]+)"\)', js))
+        return (files("vo_format.readview") / "reader.js").read_text(encoding="utf-8")
+
+    def test_every_id_reader_js_requires_is_rendered(self) -> None:
+        required = set(re.findall(r'getElementById\("([^"]+)"\)', self._js()))
         assert required, "parsed no ids out of reader.js — the regex needs updating"
 
         html = render(_script([_line("alpha")]))
-        missing = sorted(i for i in required if f'id="{i}"' not in html)
+        missing = sorted(i for i in required - self.OPTIONAL if f'id="{i}"' not in html)
         assert not missing, f"reader.js needs ids the page lacks: {missing}"
+
+    def test_optional_ids_are_guarded_before_use(self) -> None:
+        """Exempting an id from the contract is only safe if the JS checks it."""
+        js = self._js()
+        for name in sorted(self.OPTIONAL):
+            assert re.search(rf"if \(el\.{name}\)", js), (
+                f"'{name}' is exempt from the id contract but reader.js does not "
+                f"guard it — omitting the element would throw and kill the page"
+            )
+
+    def test_optional_ids_do_render_once_enabled(self) -> None:
+        html = render(_script([_line("alpha")]), library="index.html")
+        missing = sorted(i for i in self.OPTIONAL if f'id="{i}"' not in html)
+        assert not missing, f"enabled but never rendered: {missing}"
 
     def test_a_line_element_exists_for_line_height_measurement(self) -> None:
         # reader.js does querySelector(".l") to measure real line height.
@@ -268,3 +292,33 @@ class TestReaderContract:
         assert "--font-size" in js and "--font-size" in css
         assert 'data-theme="light"' in css
         assert 'data-theme="dark"' in html
+
+
+class TestLibraryButton:
+    """Opt-in only: a lone read-view has no library to return to.
+
+    The button lives in #hud because reader.js exempts #hud from the
+    freeze-and-drag gesture. Anywhere else and a finger that slides while
+    leaving would scrub the script on the way out.
+    """
+
+    def test_absent_by_default(self) -> None:
+        html = render(_script([_line("Body copy.")]))
+        assert 'id="back"' not in html
+        assert "data-library" not in html
+
+    def test_present_when_a_library_is_given(self) -> None:
+        html = render(_script([_line("Body copy.")]), library="index.html")
+        assert 'id="back"' in html
+        assert 'data-library="index.html"' in html
+
+    def test_button_sits_inside_the_hud(self) -> None:
+        html = render(_script([_line("Body copy.")]), library="index.html")
+        hud = html.split('<div id="hud">')[1].split("</div>")[0]
+        assert 'id="back"' in hud
+
+    def test_library_href_is_escaped(self) -> None:
+        """The href reaches an HTML attribute, so a quote must not break out."""
+        html = render(_script([_line("x")]), library='i.html" onload="evil()')
+        assert 'onload="evil()' not in html
+        assert "&quot;" in html

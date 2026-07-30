@@ -17,6 +17,7 @@
     bigger: document.getElementById("bigger"),
     theme: document.getElementById("theme"),
     status: document.getElementById("status"),
+    back: document.getElementById("back"),      // absent unless --library
     awake: document.getElementById("awake"),
     firstLine: document.querySelector(".bl")
   };
@@ -226,6 +227,18 @@
     store.set("theme", theme);
     applyTheme();
   });
+
+  // Only rendered with --library, so every read-view without one keeps working.
+  if (el.back) {
+    el.back.addEventListener("click", function () {
+      store.set("pos", pos);       // pagehide covers this, but this is the
+                                   // one path that leaves the page on purpose
+      // Cache-bust: in standalone mode Safari will happily hand back an index
+      // it cached before the last push, which is how a renamed script turns
+      // into a 404 on a page that looks fine.
+      location.href = (body.dataset.library || "index.html") + "?r=" + Date.now();
+    });
+  }
 
   window.addEventListener("pagehide", function () { store.set("pos", pos); });
 
