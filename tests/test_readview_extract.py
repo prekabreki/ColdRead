@@ -167,11 +167,15 @@ class TestIndentBaseline:
         ]
         assert _indent_baseline(raw) == 99.6
 
-    def test_a_repeated_outdented_column_is_kept_as_a_real_level(self) -> None:
-        """Speaker labels sitting left of the body are real structure.
+    def test_body_text_is_indent_zero_even_when_a_column_sits_left_of_it(
+        self,
+    ) -> None:
+        """Body text must be flush, whatever else is further left.
 
-        One production script has 29 such lines; collapsing them into the body
-        would erase the outdent that marks who is speaking.
+        A 5-character body indent costs 250-480 wrapped lines per multi-voice
+        script at iPad-portrait width, and wrapping breaks the
+        one-line-per-breath-group property. Speaker labels stay distinguishable
+        by weight and colour, so they clamp to 0 rather than pushing the body in.
         """
         from vo_format.readview.extract import _indent_baseline, _RawLine
 
@@ -183,7 +187,7 @@ class TestIndentBaseline:
                      False, False, 12.0)
             for i in range(674)
         ]
-        assert _indent_baseline(raw) == 63.6
+        assert _indent_baseline(raw) == 99.6
 
 
 class TestFailsLoudly:

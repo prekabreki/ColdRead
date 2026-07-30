@@ -142,26 +142,20 @@ def _normal_leading(raw: list[_RawLine]) -> float:
     return gaps.most_common(1)[0][0]
 
 
-# An x0 must appear at least this often to count as a real layout level rather
-# than a stray line. Without it the indent baseline is a single outlier: on
-# production scripts the document minimum occurs on exactly ONE line, which
-# pushed a spurious indent onto ~99% of the text.
-_MIN_INDENT_LEVEL_LINES = 3
-_MIN_INDENT_LEVEL_SHARE = 0.005
-
-
 def _indent_baseline(raw: list[_RawLine]) -> float:
-    """The leftmost x0 that represents a real layout level.
+    """The x0 that body text sits at, used as indent zero.
 
-    Deliberately not `min(...)`: the document minimum is frequently a single
-    stray line. Deliberately not the modal x0 either, because a genuinely
-    outdented column (speaker labels sitting left of the body) is real structure
-    worth keeping — on one production script that column is 29 lines.
+    The modal x0, deliberately. Two rejected alternatives, both measured:
+    `min(...)` is frequently a single stray line, which pushed a spurious indent
+    onto ~99% of the text. Taking the leftmost x0 that appears on several lines
+    preserves a genuinely outdented speaker-label column, but that costs 250-480
+    wrapped lines per multi-voice script at iPad-portrait width -- and wrapping
+    destroys the one-line-per-breath-group property this whole format exists for.
+    The outdent is redundant anyway: speaker labels are already bold, colour-coded
+    and on their own line. Anything left of the body clamps to 0.
     """
     counts: Counter[float] = Counter(round(line.x0, 1) for line in raw)
-    floor = max(_MIN_INDENT_LEVEL_LINES, int(len(raw) * _MIN_INDENT_LEVEL_SHARE))
-    levels = [x0 for x0, n in counts.items() if n >= floor]
-    return min(levels) if levels else min(counts)
+    return counts.most_common(1)[0][0]
 
 
 def extract_lines(pdf_path: str | Path) -> ReadScript:
@@ -213,6 +207,10 @@ def extract_lines(pdf_path: str | Path) -> ReadScript:
                 bold=line.bold,
                 italic=line.italic,
                 size_ratio=round(line.size / body_size, 3),
+                # The baseline is the body's own x0, so anything left of it (e.g.
+                # an outdented speaker-label column) would go negative here. The
+                # clamp is load-bearing, not defensive: it is what makes those
+                # columns flush with the body instead of pulling the body right.
                 indent=max(0, round((line.x0 - baseline) / char_width))
                 if char_width
                 else 0,

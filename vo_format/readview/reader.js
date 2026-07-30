@@ -1,6 +1,6 @@
 "use strict";
 (function () {
-  var WPM_MIN = 40, WPM_MAX = 400, WPM_STEP = 5, WPM_DEFAULT = 150;
+  var WPM_MIN = 40, WPM_MAX = 400, WPM_STEP = 10, WPM_DEFAULT = 150;
   var SIZE_MIN = 12, SIZE_MAX = 48, SIZE_STEP = 2, SIZE_DEFAULT = 20;
 
   var body = document.body;
@@ -11,6 +11,8 @@
     play: document.getElementById("play"),
     slower: document.getElementById("slower"),
     faster: document.getElementById("faster"),
+    wpmdown: document.getElementById("wpmdown"),
+    wpmup: document.getElementById("wpmup"),
     smaller: document.getElementById("smaller"),
     bigger: document.getElementById("bigger"),
     theme: document.getElementById("theme"),
@@ -181,9 +183,42 @@
     }
   });
 
+  // Tap = one step; hold = accelerating repeat, so the 40-400 range is reachable
+  // in about a second without giving up precise single taps.
+  function holdRepeat(node, fn) {
+    var timer = null, fires = 0;
+
+    function tick() {
+      fn();
+      fires += 1;
+      timer = setTimeout(tick, fires < 3 ? 300 : (fires < 8 ? 150 : 80));
+    }
+
+    function start(e) {
+      e.preventDefault();          // also suppresses the synthetic click
+      stop();
+      fn();                        // respond to the press immediately
+      fires = 0;
+      timer = setTimeout(tick, 400);
+    }
+
+    function stop() {
+      if (timer) { clearTimeout(timer); timer = null; }
+    }
+
+    node.addEventListener("touchstart", start, { passive: false });
+    node.addEventListener("touchend", stop, { passive: true });
+    node.addEventListener("touchcancel", stop, { passive: true });
+    node.addEventListener("mousedown", start);
+    node.addEventListener("mouseup", stop);
+    node.addEventListener("mouseleave", stop);
+  }
+
   el.play.addEventListener("click", toggle);
-  el.slower.addEventListener("click", function () { nudgeWpm(-WPM_STEP); });
-  el.faster.addEventListener("click", function () { nudgeWpm(WPM_STEP); });
+  holdRepeat(el.slower, function () { nudgeWpm(-WPM_STEP); });
+  holdRepeat(el.faster, function () { nudgeWpm(WPM_STEP); });
+  holdRepeat(el.wpmdown, function () { nudgeWpm(-WPM_STEP); });
+  holdRepeat(el.wpmup, function () { nudgeWpm(WPM_STEP); });
   el.smaller.addEventListener("click", function () { nudgeSize(-SIZE_STEP); });
   el.bigger.addEventListener("click", function () { nudgeSize(SIZE_STEP); });
   el.theme.addEventListener("click", function () {

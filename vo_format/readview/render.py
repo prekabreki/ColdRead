@@ -102,7 +102,9 @@ maximum-scale=1, viewport-fit=cover">
 <button id="smaller" type="button" aria-label="Smaller text">A&minus;</button>
 <button id="bigger" type="button" aria-label="Larger text">A+</button>
 <button id="play" type="button" aria-label="Play or pause">&#9654;</button>
+<button id="wpmdown" type="button" aria-label="Slower">&minus;</button>
 <span id="status"></span>
+<button id="wpmup" type="button" aria-label="Faster">+</button>
 <button id="theme" type="button" aria-label="Toggle light or dark">&#9790;</button>
 </div>
 <video id="awake" muted loop playsinline preload="auto"
