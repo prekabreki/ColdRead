@@ -16,7 +16,7 @@
     theme: document.getElementById("theme"),
     status: document.getElementById("status"),
     awake: document.getElementById("awake"),
-    firstLine: document.querySelector(".l")
+    firstLine: document.querySelector(".l:not(.hdr)")
   };
 
   // Safari blocks storage for file:// origins, and Phase 1 is delivered as a

@@ -147,3 +147,23 @@ class TestReaderContract:
         html = render(_script([_line("one two three")], title="T"))
         assert "data-words-per-line=" in html
         assert "data-title=" in html
+
+    def test_line_height_probe_cannot_match_the_header(self) -> None:
+        """reader.js measures one line to derive px-per-second.
+
+        The header title renders at 1.4em. If the probe matches it, every scroll
+        rate is ~40% too fast — a bug that looks like "the speed setting lies"
+        rather than like a selector mistake, so pin both sides of the contract.
+        """
+        from importlib.resources import files
+
+        js = (files("vo_format.readview") / "reader.js").read_text(encoding="utf-8")
+        probe = re.search(r'firstLine:\s*document\.querySelector\("([^"]+)"\)', js)
+        assert probe, "could not find reader.js's line-height probe selector"
+        assert ":not(.hdr)" in probe.group(1), (
+            f"probe {probe.group(1)!r} would match the 1.4em header title"
+        )
+
+        # The exclusion only works if render.py actually marks the header.
+        html = render(_script([_line("body line")], title="Some Title"))
+        assert 'class="hdr l' in html, "header paragraphs must carry the hdr class"
