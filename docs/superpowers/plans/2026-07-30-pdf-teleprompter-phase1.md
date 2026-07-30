@@ -1005,7 +1005,11 @@ body {
   gap: 14px;
   align-items: center;
   justify-content: center;
-  padding: 10px 12px;
+  /* The bottom inset is load-bearing on iPadOS: under viewport-fit=cover the
+     system reserves a home-indicator gesture strip, and a bar flush to bottom:0
+     has taps on its lower edge swallowed by the swipe-up gesture. env() resolves
+     to 0px where there is no inset, so desktop and the Pi are unaffected. */
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom)) 12px;
   background: var(--bg);
   border-top: 1px solid var(--chrome);
   font-size: 15px;
@@ -1020,6 +1024,7 @@ body {
   border-radius: 6px;
   padding: 8px 12px;
   min-width: 44px;              /* Apple's minimum comfortable touch target */
+  min-height: 44px;             /* without this the computed height is ~39px */
   -webkit-tap-highlight-color: transparent;
 }
 
