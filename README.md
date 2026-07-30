@@ -81,6 +81,36 @@ coldread vo_format/samples/multi_voice_drama_sample.md --no-preflight --archetyp
 
 Run the test suite with `python -m pytest tests/` (no API key needed).
 
+## Teleprompter read-view
+
+`coldread-readview` turns an already-formatted ColdRead PDF into a single
+self-contained HTML page that auto-scrolls, for reading aloud off a tablet.
+
+```bash
+coldread-readview "path/to/My Script - formatted.pdf"
+# writes "path/to/My Script - formatted - readview.html"
+```
+
+The output name keeps the PDF's full stem rather than just swapping the
+extension, so a `formatted` cut and a `batched` cut of the same title each get
+their own HTML file instead of overwriting one another.
+
+It reads the PDF's embedded text layer, so speaker colors, bold and italic, the
+size hierarchy, indentation, and the cold-read breath-group line breaks all
+carry over exactly. Pages do not: the result is one continuous scroll with no
+page seams.
+
+The output has no external references of any kind — all CSS, JS, and the
+keep-awake video are inlined — so it works with the network off.
+
+**Controls:** hold a finger on the text to freeze it, drag to reposition, lift to
+resume. The unlabelled left and right edge strips step the speed in words per
+minute. `A−`/`A+` set type size. Space, arrow keys and Page Up/Down do the same
+from a keyboard, which is also how a Bluetooth foot pedal reaches it.
+
+Re-running skips any page whose HTML is already strictly newer than its PDF;
+pass `--force` to re-render anyway.
+
 ## How it works
 
 Extract the text, ask Claude for a structural read of the script (returned as JSON only), resolve the toggles, format deterministically in Python, then render the PDF with ReportLab. Claude classifies; it never rewrites. That split is deliberate: the same script and toggles always produce the same PDF, and your words come out exactly as you wrote them.

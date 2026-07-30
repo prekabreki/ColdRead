@@ -39,15 +39,16 @@ Issues = "https://github.com/prekabreki/ColdRead/issues"
 
 [project.scripts]
 coldread = "vo_format.cli:main"
+coldread-readview = "vo_format.readview.cli:_entry"
 
 [project.gui-scripts]
 coldread-gui = "vo_format.gui_main:gui_main"
 
 [tool.setuptools]
-packages = ["vo_format"]
+packages = ["vo_format", "vo_format.readview"]
 
 [tool.setuptools.package-data]
-vo_format = ["samples/*.md"]
+vo_format = ["samples/*.md", "readview/*.css", "readview/*.js"]
 
 [tool.ruff]
 line-length = 88
