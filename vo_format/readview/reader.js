@@ -49,8 +49,11 @@
 
   function lineHeightPx() {
     // Measured, not assumed: it changes with font size and orientation.
+    // getComputedStyle, not a bounding-rect measurement: the rect of a block
+    // <p> is the whole box, so a probed line that WRAPS would report double
+    // the line height and the page would scroll at twice the displayed wpm.
     if (!el.firstLine) { return size * 1.55; }
-    var h = el.firstLine.getBoundingClientRect().height;
+    var h = parseFloat(getComputedStyle(el.firstLine).lineHeight);
     return h > 0 ? h : size * 1.55;
   }
 

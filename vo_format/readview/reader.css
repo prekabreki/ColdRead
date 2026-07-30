@@ -51,6 +51,13 @@ body {
 .l.b { font-weight: 700; }
 .l.i { font-style: italic; }
 
+/* Character colour is the performer's voice-switch cue, so it must survive the
+   light theme. Each coloured line carries both its dark-background colour (--c)
+   and its original print colour (--cl); the print palette is AA on white by
+   construction, the dark palette is not. */
+.l[style*="--c"] { color: var(--c); }
+:root[data-theme="light"] .l[style*="--cl"] { color: var(--cl); }
+
 /* Speed zones: full-height edge strips, deliberately unlabelled and always in
    the same place so they can be hit without looking. */
 .zone {

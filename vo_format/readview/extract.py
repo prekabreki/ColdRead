@@ -80,6 +80,14 @@ class _RawLine:
 
 
 def _harvest(doc: fitz.Document) -> list[_RawLine]:
+    """Flatten every text line in `doc` into `_RawLine`s.
+
+    Style (color, weight, slant, size) is taken from the line's *first* span
+    only, so a line whose style changes mid-line renders uniformly. This is a
+    deliberate simplification, not an oversight: the production corpus was
+    checked and contains zero lines that mix *colors* mid-line, so no
+    voice-switch cue is ever lost to it in practice.
+    """
     raw: list[_RawLine] = []
     for page_no, page in enumerate(doc):
         for block in page.get_text("dict")["blocks"]:
@@ -134,6 +142,28 @@ def _normal_leading(raw: list[_RawLine]) -> float:
     return gaps.most_common(1)[0][0]
 
 
+# An x0 must appear at least this often to count as a real layout level rather
+# than a stray line. Without it the indent baseline is a single outlier: on
+# production scripts the document minimum occurs on exactly ONE line, which
+# pushed a spurious indent onto ~99% of the text.
+_MIN_INDENT_LEVEL_LINES = 3
+_MIN_INDENT_LEVEL_SHARE = 0.005
+
+
+def _indent_baseline(raw: list[_RawLine]) -> float:
+    """The leftmost x0 that represents a real layout level.
+
+    Deliberately not `min(...)`: the document minimum is frequently a single
+    stray line. Deliberately not the modal x0 either, because a genuinely
+    outdented column (speaker labels sitting left of the body) is real structure
+    worth keeping — on one production script that column is 29 lines.
+    """
+    counts: Counter[float] = Counter(round(line.x0, 1) for line in raw)
+    floor = max(_MIN_INDENT_LEVEL_LINES, int(len(raw) * _MIN_INDENT_LEVEL_SHARE))
+    levels = [x0 for x0, n in counts.items() if n >= floor]
+    return min(levels) if levels else min(counts)
+
+
 def extract_lines(pdf_path: str | Path) -> ReadScript:
     """Read `pdf_path` into a ReadScript.
 
@@ -160,7 +190,7 @@ def extract_lines(pdf_path: str | Path) -> ReadScript:
         )
 
     body_size = _modal_size(raw)
-    min_x0 = min(line.x0 for line in raw)
+    baseline = _indent_baseline(raw)
     leading = _normal_leading(raw)
     gap_threshold = leading * PARAGRAPH_GAP_FACTOR if leading else float("inf")
     char_width = body_size * COURIER_ADVANCE_RATIO
@@ -183,7 +213,9 @@ def extract_lines(pdf_path: str | Path) -> ReadScript:
                 bold=line.bold,
                 italic=line.italic,
                 size_ratio=round(line.size / body_size, 3),
-                indent=round((line.x0 - min_x0) / char_width) if char_width else 0,
+                indent=max(0, round((line.x0 - baseline) / char_width))
+                if char_width
+                else 0,
                 gap_before=gap_before,
             )
         )

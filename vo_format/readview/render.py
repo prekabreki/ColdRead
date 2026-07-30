@@ -53,9 +53,13 @@ def _line_html(line: ReadLine) -> str:
     styles: list[str] = []
     color = dark_color(line.color)
     # Body text takes its color from the theme's --fg so the light/dark toggle
-    # can move it; only genuinely colored lines get a hard value.
+    # can move it; only genuinely colored lines carry explicit values. A colored
+    # line carries BOTH its dark-theme color (--c) and its original print color
+    # (--cl) as custom properties rather than a single inline `color:` — an
+    # inline color would outrank the light-theme CSS rule and strand the reader
+    # with dark-palette colors (as low as 1.29:1 contrast) on a white background.
     if color.lower() != dark_color("#000000").lower():
-        styles.append(f"color:{color}")
+        styles.append(f"--c:{color};--cl:{line.color.lower()}")
     if line.indent:
         styles.append(f"margin-left:{line.indent}ch")
     if line.size_ratio != 1.0:

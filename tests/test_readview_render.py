@@ -132,6 +132,20 @@ class TestStructure:
         assert 'data-title="Warcraft Ep1 - formatted"' in a
         assert 'data-title="Warcraft Ep1 - batched"' in b
 
+    def test_a_coloured_line_carries_both_theme_colours(self) -> None:
+        """Character colour is the voice-switch cue and must survive both themes.
+
+        The dark palette is illegible on white (as low as 1.29:1), so the light
+        theme has to fall back to the original print colour.
+        """
+        html = render(_script([_line("Alfred:", color="#2563EB")]))
+        assert "--c:#729af2" in html, "missing the dark-theme colour"
+        assert "--cl:#2563eb" in html, "missing the print colour for light theme"
+
+    def test_body_text_carries_no_colour_so_it_follows_the_theme(self) -> None:
+        html = render(_script([_line("plain narration")]))
+        assert "--c:" not in html
+
 
 class TestEscaping:
     def test_html_metacharacters_in_script_text_are_escaped(self) -> None:
@@ -218,3 +232,39 @@ class TestReaderContract:
         html = render(_script([_line("BIG HEADING", size_ratio=1.5)]))
         assert 'class="l"' in html or 'class="l ' in html
         assert "bl" not in re.search(r'<p class="([^"]*)"', html).group(1).split()
+
+    def test_line_height_is_read_from_computed_style_not_a_bounding_rect(self) -> None:
+        """A block <p>'s bounding rect is the whole box, not one line.
+
+        If the probed line wraps — reachable by pressing A+ on a real script —
+        the rect reports double the line height and the page scrolls at twice the
+        displayed wpm. Computed lineHeight is per-line and wrap-immune.
+        """
+        from importlib.resources import files
+
+        js = (files("vo_format.readview") / "reader.js").read_text(encoding="utf-8")
+        body = js[js.index("function lineHeightPx"):]
+        body = body[: body.index("\n  }")]
+        assert "getComputedStyle" in body
+        assert "getBoundingClientRect" not in body, (
+            "lineHeightPx must not measure a bounding rect — it doubles on wrap"
+        )
+
+    def test_couplings_reader_js_relies_on_are_present_in_css_and_html(self) -> None:
+        """These are referenced by selector or custom property, not by id.
+
+        Drift makes HUD taps freeze and drag the script (the closest() guard), or
+        silently deadens A-/A+ (the --font-size property), with no error anywhere.
+        """
+        from importlib.resources import files
+
+        pkg = files("vo_format.readview")
+        js = (pkg / "reader.js").read_text(encoding="utf-8")
+        css = (pkg / "reader.css").read_text(encoding="utf-8")
+        html = render(_script([_line("alpha")]))
+
+        assert 'closest("#hud, .zone")' in js
+        assert 'id="hud"' in html and 'class="zone"' in html
+        assert "--font-size" in js and "--font-size" in css
+        assert 'data-theme="light"' in css
+        assert 'data-theme="dark"' in html

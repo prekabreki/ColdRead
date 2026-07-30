@@ -151,6 +151,41 @@ class TestStyleFidelity:
         assert got["Bravo"] is False, "consecutive lines must not"
 
 
+class TestIndentBaseline:
+    """The indent baseline must be a real layout level, not a stray line."""
+
+    def test_a_single_outlier_line_does_not_indent_the_whole_body(self) -> None:
+        from vo_format.readview.extract import _indent_baseline, _RawLine
+
+        raw = [
+            _RawLine(0, 0.0, 79.2, "one stray outdented line", "#000000",
+                     False, False, 12.0)
+        ] + [
+            _RawLine(0, float(i), 99.6, f"body line {i}", "#000000",
+                     False, False, 12.0)
+            for i in range(1, 200)
+        ]
+        assert _indent_baseline(raw) == 99.6
+
+    def test_a_repeated_outdented_column_is_kept_as_a_real_level(self) -> None:
+        """Speaker labels sitting left of the body are real structure.
+
+        One production script has 29 such lines; collapsing them into the body
+        would erase the outdent that marks who is speaking.
+        """
+        from vo_format.readview.extract import _indent_baseline, _RawLine
+
+        raw = [
+            _RawLine(0, float(i), 63.6, "Alfred:", "#000000", False, False, 12.0)
+            for i in range(29)
+        ] + [
+            _RawLine(0, float(100 + i), 99.6, f"body {i}", "#000000",
+                     False, False, 12.0)
+            for i in range(674)
+        ]
+        assert _indent_baseline(raw) == 63.6
+
+
 class TestFailsLoudly:
     def test_a_pdf_with_no_text_layer_raises(self, tmp_path) -> None:
         import fitz
