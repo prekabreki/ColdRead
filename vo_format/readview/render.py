@@ -21,6 +21,11 @@ def _asset(name: str) -> str:
 
 def _line_html(line: ReadLine) -> str:
     classes = ["l"]
+    if line.size_ratio == 1.0:
+        # The probe reader.js uses to measure real line height must land on a
+        # body-sized line. Every production PDF opens with a title line at
+        # 1.33-1.5em, so "first line" is the wrong target.
+        classes.append("bl")
     if line.gap_before:
         classes.append("gap")
     if line.bold:

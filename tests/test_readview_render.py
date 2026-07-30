@@ -76,12 +76,14 @@ class TestStructure:
 
     def test_gap_before_adds_the_gap_class(self) -> None:
         html = render(_script([_line("alpha"), _line("bravo", gap_before=True)]))
-        assert re.search(r'<p class="l gap"[^>]*>bravo</p>', html)
+        # Both lines are at the default size_ratio (1.0), so they also carry the
+        # "bl" (body-line) class the line-height probe targets.
+        assert re.search(r'<p class="l bl gap"[^>]*>bravo</p>', html)
 
     def test_bold_and_italic_become_classes(self) -> None:
         html = render(_script([_line("b", bold=True), _line("i", italic=True)]))
-        assert 'class="l b"' in html
-        assert 'class="l i"' in html
+        assert 'class="l bl b"' in html
+        assert 'class="l bl i"' in html
 
     def test_color_is_emitted_as_its_dark_counterpart(self) -> None:
         html = render(_script([_line("spoken", color="#2563EB")]))
@@ -148,22 +150,46 @@ class TestReaderContract:
         assert "data-words-per-line=" in html
         assert "data-title=" in html
 
-    def test_line_height_probe_cannot_match_the_header(self) -> None:
-        """reader.js measures one line to derive px-per-second.
+    def test_probe_measures_a_body_line_not_an_oversized_leading_line(self) -> None:
+        """All ten production PDFs open with a title line at 1.33-1.5em.
 
-        The header title renders at 1.4em. If the probe matches it, every scroll
-        rate is ~40% too fast — a bug that looks like "the speed setting lies"
-        rather than like a selector mistake, so pin both sides of the contract.
+        If the line-height probe measures that, every scroll rate runs 33-50%
+        fast — and the symptom reads as "the wpm setting lies", nowhere near a
+        CSS selector. None of the sample fixtures reproduce the shape (they are
+        formatted without a title page), so the shape is built explicitly here.
         """
         from importlib.resources import files
 
         js = (files("vo_format.readview") / "reader.js").read_text(encoding="utf-8")
-        probe = re.search(r'firstLine:\s*document\.querySelector\("([^"]+)"\)', js)
-        assert probe, "could not find reader.js's line-height probe selector"
-        assert ":not(.hdr)" in probe.group(1), (
-            f"probe {probe.group(1)!r} would match the 1.4em header title"
+        match = re.search(
+            r'firstLine:\s*document\.querySelector\("([^"]+)"\)', js
+        )
+        assert match, "could not find reader.js's line-height probe"
+        assert match.group(1) == ".bl", (
+            f"probe is {match.group(1)!r}; it must be '.bl' so it can only match "
+            "a line at the document's modal size"
         )
 
-        # The exclusion only works if render.py actually marks the header.
-        html = render(_script([_line("body line")], title="Some Title"))
-        assert 'class="hdr l' in html, "header paragraphs must carry the hdr class"
+        html = render(
+            _script(
+                [
+                    _line("KINGDOM HEARTS DARK ROAD", size_ratio=1.5, bold=True),
+                    _line("the corridor was quiet,"),
+                    _line("and nothing moved"),
+                ]
+            )
+        )
+        probed = [
+            m
+            for m in re.finditer(r'<p class="([^"]*)"([^>]*)>', html)
+            if "bl" in m.group(1).split()
+        ]
+        assert probed, "no body line carried the bl class"
+        assert "font-size" not in probed[0].group(2), (
+            f"the probed element has an inline font-size: {probed[0].group(2)!r}"
+        )
+
+    def test_oversized_lines_do_not_get_the_body_line_class(self) -> None:
+        html = render(_script([_line("BIG HEADING", size_ratio=1.5)]))
+        assert 'class="l"' in html or 'class="l ' in html
+        assert "bl" not in re.search(r'<p class="([^"]*)"', html).group(1).split()
