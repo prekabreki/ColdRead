@@ -1140,7 +1140,11 @@ Create `vo_format/readview/reader.js`:
     theme: document.getElementById("theme"),
     status: document.getElementById("status"),
     awake: document.getElementById("awake"),
-    firstLine: document.querySelector(".l")
+    // MUST be `.bl`, not `.l`. Every production PDF opens with a title-page line
+    // at 1.33-1.5em; measuring that inflates every scroll rate by the same factor
+    // (150 wpm would run at ~210). `.bl` marks lines at the document's modal size,
+    // and at least one always exists because size_ratio is normalised against it.
+    firstLine: document.querySelector(".bl")
   };
 
   // Safari blocks storage for file:// origins, and Phase 1 is delivered as a
@@ -1509,6 +1513,10 @@ def _asset(name: str) -> str:
 
 def _line_html(line: ReadLine) -> str:
     classes = ["l"]
+    if line.size_ratio == 1.0:
+        # "bl" = body line. reader.js probes this to measure real line height, so
+        # it must only ever mark lines at the document's modal size.
+        classes.append("bl")
     if line.gap_before:
         classes.append("gap")
     if line.bold:
@@ -1548,12 +1556,12 @@ maximum-scale=1, viewport-fit=cover">
 {_asset("reader.css")}
 </style>
 </head>
-<body data-words-per-line="{script.words_per_line:.4g}" data-title="{title}">
+<body data-words-per-line="{script.words_per_line:.1f}" data-title="{title}">
 <div class="zone" id="slower">&minus;</div>
 <div class="zone" id="faster">+</div>
 <div id="script">
-<p class="l b" style="font-size:1.4em">{title}</p>
-<p class="l i">{len(script.lines)} lines &middot; {script.word_count} words \
+<p class="hdr l b" style="font-size:1.4em">{title}</p>
+<p class="hdr l i">{len(script.lines)} lines &middot; {script.word_count} words \
 &middot; derived {escape(script.derived[:10])}</p>
 {lines}
 </div>
