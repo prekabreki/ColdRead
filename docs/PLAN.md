@@ -123,6 +123,13 @@ that commitment:
 
 ## Out of scope (deferred — real ideas, wrong fit for this workflow now)
 
+> **⚠ Amended 2026-07-30 — two entries below were REVERSED and are now shipped.**
+> Auto-scroll and local-server delivery both left this list and became the
+> `coldread-readview` teleprompter, merged in `a9a54f0` and validated on the
+> owner's iPad. Full reasoning: `docs/superpowers/specs/2026-07-30-pdf-teleprompter-design.md`.
+> Anyone planning work from this document must read that spec first — the rest of
+> this list still stands, but these two do not.
+
 From the roadmap / competitive brief, explicitly **not** building now:
 
 - Take-log, pickup marking, **stable line-IDs**, JSON sidecar (no need to mark
@@ -130,11 +137,43 @@ From the roadmap / competitive brief, explicitly **not** building now:
 - **Persistent pronunciation lexicon** (owner did not rank re-fixing names as a
   top pain).
 - **Per-section / live timing HUD** (a rough total is plenty).
-- **Auto-scroll / voice-tracking** (fights variable-pace character performance).
+- ~~**Auto-scroll / voice-tracking** (fights variable-pace character
+  performance).~~ **REVERSED 2026-07-30 — auto-scroll SHIPPED.** The objection
+  was right about *uncontrolled* auto-scroll. Touch-to-freeze, drag-to-reposition
+  and release-to-resume answer it directly: the performer holds the pace, the page
+  merely defaults to moving. Voice-tracking remains out of scope.
 - **Fountain / FDX / RTF / SRT import** (not the owner's input formats).
 - **Document furniture** — page numbers, widow/orphan, MORE/CONT'D (irrelevant
   when scrolling, not paging).
 - **Round-trip verification** (`--verify`) — nice trust feature, not a felt pain.
 
+Also reversed, from Epic 1's own scope note rather than this list:
+
+- ~~Local live-server delivery ("live later" — a possible future add-on).~~
+  **REVERSED 2026-07-30 — the server is the DELIVERY PATH, not an add-on.** The
+  epic assumed a file synced through OneDrive would open on the iPad. It does not:
+  iOS previews a local `.html` rather than running it, so the artifact is
+  undeliverable without HTTP. An always-on Pi on the LAN also removes the
+  rig-must-be-awake objection entirely.
+
 These stay in `docs/ColdRead-roadmap.md` for if the audience ever widens beyond
 the maintainer.
+
+## What actually shipped (2026-07-30)
+
+`coldread-readview <pdf>` renders a finished ColdRead PDF into one self-contained
+auto-scrolling HTML page. It reads the PDF's embedded text layer, so speaker
+colours, bold/italic, the size hierarchy and the cold-read breath-group line
+breaks all carry over exactly — and pages stop existing, which is what removes the
+paging friction Epic 1 was written to solve.
+
+Notably this **did not need Epic 2 (the meaning-first breath breaker, #3) or the
+render-op layer (#31)**, both of which #4 was blocked on: the breath groups are
+already baked into the PDFs by `--cold-read-breaks`, and reading a finished PDF is
+a different input from the `FormattedBlock` stream those issues operate on. Epic 1
+(#4), which renders from source, remains open and still depends on both.
+
+Confirmed working on device: library index, tap-through, auto-scroll, hold-to-
+freeze/drag/release, font resize, light/dark toggle, wpm control with
+hold-to-accelerate. **Not** working: keep-awake — `navigator.wakeLock` needs a
+secure context, so it awaits HTTPS.
