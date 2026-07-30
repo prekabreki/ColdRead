@@ -107,6 +107,31 @@ class TestStructure:
         assert "Kingdom Hearts Dark Road" in html
         assert "2026-07-30" in html
 
+    def test_heading_drops_the_filename_variant_suffix(self) -> None:
+        html = render(_script([_line("x")], title="Dark Road - formatted"))
+        assert ">Dark Road</p>" in html
+        assert "Dark Road - formatted</p>" not in html
+
+    def test_subtitle_names_the_variant_so_cuts_stay_tellable_apart(self) -> None:
+        html = render(_script([_line("x")], title="Bloodborne Ep1 - batched"))
+        assert "batched cut" in html
+
+    def test_a_title_with_no_variant_is_shown_unchanged(self) -> None:
+        html = render(_script([_line("x")], title="Some Episode"))
+        assert ">Some Episode</p>" in html
+        assert "cut" not in html.split("<style>")[0]
+
+    def test_data_title_keeps_the_full_stem_so_storage_keys_stay_distinct(self) -> None:
+        """reader.js derives its localStorage key from data-title.
+
+        If the variant were stripped there, the formatted and batched cuts of one
+        title would share saved scroll position, speed and font size.
+        """
+        a = render(_script([_line("x")], title="Warcraft Ep1 - formatted"))
+        b = render(_script([_line("x")], title="Warcraft Ep1 - batched"))
+        assert 'data-title="Warcraft Ep1 - formatted"' in a
+        assert 'data-title="Warcraft Ep1 - batched"' in b
+
 
 class TestEscaping:
     def test_html_metacharacters_in_script_text_are_escaped(self) -> None:

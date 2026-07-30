@@ -7,12 +7,29 @@ booth.
 
 from __future__ import annotations
 
+import re
 from html import escape
 from importlib.resources import files
 
 from .assets import KEEP_AWAKE_MP4_BASE64
 from .extract import ReadLine, ReadScript
 from .theme import DARK_BACKGROUND, dark_color
+
+_VARIANT_RE = re.compile(r"\s+-\s+(formatted|batched)$", re.IGNORECASE)
+
+
+def _split_variant(title: str) -> tuple[str, str]:
+    """Separate a display title from its cut variant.
+
+    Filenames keep the variant so a formatted and a batched cut of one title
+    cannot overwrite each other, but "Dark Road - formatted" is bookkeeping, not
+    something a reader needs at the top of the page. Returns (display, variant),
+    where variant is "" when the title carries none.
+    """
+    match = _VARIANT_RE.search(title)
+    if not match:
+        return title, ""
+    return title[: match.start()], match.group(1).lower()
 
 
 def _asset(name: str) -> str:
@@ -51,6 +68,9 @@ def _line_html(line: ReadLine) -> str:
 def render(script: ReadScript) -> str:
     """Render `script` as one self-contained HTML document."""
     title = escape(script.title)
+    display, variant = _split_variant(script.title)
+    display = escape(display)
+    variant_suffix = f" &middot; {variant} cut" if variant else ""
     lines = "\n".join(_line_html(line) for line in script.lines)
     return f"""<!doctype html>
 <html lang="en" data-theme="dark">
@@ -69,9 +89,9 @@ maximum-scale=1, viewport-fit=cover">
 <div class="zone" id="slower">&minus;</div>
 <div class="zone" id="faster">+</div>
 <div id="script">
-<p class="hdr l b" style="font-size:1.4em">{title}</p>
+<p class="hdr l b" style="font-size:1.4em">{display}</p>
 <p class="hdr l i">{len(script.lines)} lines &middot; {script.word_count} words \
-&middot; derived {escape(script.derived[:10])}</p>
+&middot; derived {escape(script.derived[:10])}{variant_suffix}</p>
 {lines}
 </div>
 <div id="hud">

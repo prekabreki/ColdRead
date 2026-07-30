@@ -86,7 +86,6 @@ body {
   background: var(--bg);
   border-top: 1px solid var(--chrome);
   font-size: 15px;
-  opacity: 0.85;
 }
 
 #hud button {
