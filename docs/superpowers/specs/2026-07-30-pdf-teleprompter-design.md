@@ -243,18 +243,29 @@ is plain HTTP on a LAN address. So `navigator.wakeLock` will be **undefined in
 both Phase 1 and Phase 2**, and a design that relied on it would fail in the
 booth, not in testing.
 
-> **Measured on device 2026-07-30: layer 1 below FAILED.** The screen turned off
-> inside two minutes. The muted-video technique does not hold this iPad awake, so
-> the ordering below is wrong — **`tailscale serve` HTTPS is promoted from "a
-> future upgrade" to a Phase 2 requirement**, because it is the only route that
-> makes the real API available. Layer 3 is the current answer.
+> **RESOLVED on device, 2026-07-30. Measured on iPadOS 26.6.**
 >
-> One untested hypothesis before writing the video off entirely: `reader.css`
-> sets `#awake { opacity: 0 }`, and iOS is known to discount playback of a video
-> it treats as non-visible. NoSleep.js, the source of this technique, does not
-> zero opacity. Worth one attempt at a near-zero-but-nonzero value; note the
-> autoplay path is *not* the problem, since `play()` already runs inside the
-> play-button gesture.
+> **Layer 1 (muted video) FAILED** — the screen turned off inside two minutes.
+> Treat it as dead on modern iOS rather than broken: Safari has shipped the real
+> Screen Wake Lock API since 16.4, and Apple has progressively neutered the video
+> workaround since. The `#awake { opacity: 0 }` hypothesis was *not* pursued, and
+> should not be: the API's absence was the whole cause, and `play()` already ran
+> inside a user gesture so autoplay policy was never implicated. The video stays in
+> the page as a harmless fallback for anyone serving over plain HTTP.
+>
+> **Layer 2 (`navigator.wakeLock`) WORKS, and is now the mechanism.** It was
+> unavailable purely for want of a secure context. Serving the library through
+> `tailscale serve` yields a genuine Let's Encrypt certificate, at which point the
+> API is present and the page acquires it on play. **Verified: three minutes
+> unattended, screen awake, still scrolling.** So the ordering below is inverted in
+> practice — HTTPS is not an optional upgrade, it is the requirement, and layer 3
+> is no longer needed.
+>
+> As deployed: the library lives on the always-on Pi at
+> `https://raspberrypi.tail6fdc98.ts.net`, served by a `coldread-library` systemd
+> unit bound to `127.0.0.1` only (so it is not reachable on the LAN at all —
+> Tailscale proxies it locally), capped with `MemoryMax=64M` so it can never
+> squeeze `pihole-FTL` on a 416MB box that serves the house's DNS.
 
 Three layers, in order:
 
