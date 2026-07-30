@@ -21,11 +21,24 @@ class TestHappyPath:
     def test_output_name_follows_the_formatted_convention(self, tmp_path) -> None:
         pdf = tmp_path / "Kingdom Hearts Dark Road - formatted.pdf"
         assert readview_path_for(pdf).name == (
-            "Kingdom Hearts Dark Road - readview.html"
+            "Kingdom Hearts Dark Road - formatted - readview.html"
         )
 
     def test_a_pdf_without_the_suffix_still_gets_a_sane_name(self, tmp_path) -> None:
         assert readview_path_for(tmp_path / "Ep1.pdf").name == "Ep1 - readview.html"
+
+    def test_variant_pdfs_do_not_collide_on_one_output_name(self, tmp_path) -> None:
+        """`X - formatted.pdf` and `X - batched.pdf` are different documents.
+
+        Three titles in the production folders ship both. Collapsing them onto
+        one filename silently overwrites one with the other, and the mtime skip
+        can then serve the wrong cut while reporting success.
+        """
+        base = "Bloodborne Ep1 - Blood Ministry"
+        a = readview_path_for(tmp_path / f"{base} - formatted.pdf")
+        b = readview_path_for(tmp_path / f"{base} - batched.pdf")
+        assert a != b, f"both variants map to {a.name}"
+        assert "formatted" in a.name and "batched" in b.name
 
     def test_prints_the_line_count_canary(self, sample_pdf, capsys) -> None:
         pdf_path, _ = sample_pdf(Archetype.SINGLE_NARRATOR)
