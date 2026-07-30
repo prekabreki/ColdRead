@@ -3,5 +3,12 @@
 from __future__ import annotations
 
 from .extract import ReadLine, ReadScript, ReadViewError, extract_lines
+from .render import render
 
-__all__ = ["ReadLine", "ReadScript", "ReadViewError", "extract_lines"]
+__all__ = [
+    "ReadLine",
+    "ReadScript",
+    "ReadViewError",
+    "extract_lines",
+    "render",
+]
