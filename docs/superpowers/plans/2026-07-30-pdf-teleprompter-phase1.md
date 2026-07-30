@@ -1796,18 +1796,22 @@ from pathlib import Path
 from .extract import ReadViewError, extract_lines
 from .render import render
 
-_PDF_SUFFIX = " - formatted"
 _OUT_SUFFIX = " - readview"
 
 
 def readview_path_for(pdf: Path) -> Path:
-    """The HTML path for a PDF, mirroring the `- formatted.pdf` convention."""
-    stem = pdf.stem
-    for suffix in (_PDF_SUFFIX, " - batched"):
-        if stem.endswith(suffix):
-            stem = stem[: -len(suffix)]
-            break
-    return pdf.with_name(f"{stem}{_OUT_SUFFIX}.html")
+    """The HTML path for a PDF.
+
+    Derived from the FULL stem deliberately, which makes it injective: two files
+    cannot share a stem within one directory, so they cannot share an output
+    name. An earlier version stripped a trailing " - formatted"/" - batched"
+    first, and three production titles ship BOTH cuts (batched is grouped by
+    character for recording — a different document, not a duplicate), so each
+    pair collapsed onto one filename and silently overwrote the other: 10 input
+    PDFs produced 7 outputs. Keeping the whole stem also leaves the variant
+    visible in the filename, which is what tells you which cut you are reading.
+    """
+    return pdf.with_name(f"{pdf.stem}{_OUT_SUFFIX}.html")
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -1833,17 +1837,27 @@ def _convert(pdf: Path, force: bool) -> None:
         raise ReadViewError(f"{pdf}: not a file")
 
     out = readview_path_for(pdf)
-    if not force and out.exists() and out.stat().st_mtime >= pdf.stat().st_mtime:
+    # Strictly newer, not >=: a tie (coarse filesystem mtimes, or a PDF
+    # re-derived within the same timestamp tick) must re-render rather than risk
+    # skipping and serving a stale read-view while claiming success.
+    if not force and out.exists() and out.stat().st_mtime > pdf.stat().st_mtime:
         print(f"skip  {out.name} (newer than its PDF)")
         return
 
     script = extract_lines(pdf)
+    try:
+        out.write_text(render(script), encoding="utf-8")
+    except OSError as exc:
+        # An OSError here is not a ReadViewError, so without this the batch dies
+        # with a raw traceback and the remaining PDFs are never attempted.
+        raise ReadViewError(f"{out.name}: could not write ({exc})") from exc
     # The canary: line count tracks the script, so a three-digit drop is visible.
+    # Printed only after the write succeeds, so "ok" never claims a file exists
+    # when it does not.
     print(
         f"ok    {out.name} — extracted {len(script.lines)} lines "
         f"from {script.page_count} pages, {script.word_count} words"
     )
-    out.write_text(render(script), encoding="utf-8")
 
 
 def main(argv: list[str] | None = None) -> int:
