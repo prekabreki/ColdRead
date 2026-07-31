@@ -32,6 +32,9 @@ body {
   -webkit-text-size-adjust: none;   /* Safari must not resize our text for us */
   -webkit-user-select: none;
   user-select: none;
+  /* The resume mark is a 500ms press. Without this, iOS answers that with a
+     share sheet over the script instead. */
+  -webkit-touch-callout: none;
   overscroll-behavior: none;
   touch-action: none;               /* we drive scrolling ourselves */
 }
@@ -50,6 +53,16 @@ body {
 .l.gap { margin-top: var(--line-height); }
 .l.b { font-weight: 700; }
 .l.i { font-style: italic; }
+
+/* The resume mark. Amber at low alpha reads on both themes, and keeping the
+   text at --fg means a marked word in a coloured character line does not lose
+   its voice-switch cue to the highlight. */
+mark.resume {
+  background: rgba(255, 184, 77, 0.32);
+  color: inherit;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px rgba(255, 184, 77, 0.55);
+}
 
 /* Character colour is the performer's voice-switch cue, so it must survive the
    light theme. Each coloured line carries both its dark-background colour (--c)
@@ -107,7 +120,27 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-#status { min-width: 11ch; text-align: center; font-variant-numeric: tabular-nums; }
+#status { min-width: 15ch; text-align: center; font-variant-numeric: tabular-nums; }
+
+/* Progress: the peripheral cue, for when you are looking at the script and not
+   at the HUD. A pseudo-element driven by --progress rather than a real <div>:
+   nothing extra in the DOM to be missing, and no element for reader.js to have
+   to find before it can paint. #hud is position:fixed, so it is already the
+   containing block, and its border-top reads as the unfilled track.
+
+   Deliberately no transition — this repaints every frame while scrolling, and a
+   transition would drag the fill behind the percentage sitting next to it. */
+#hud::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--progress, 0%);
+  height: 3px;
+  background: var(--fg);
+  opacity: 0.5;
+  pointer-events: none;
+}
 
 #awake {
   position: fixed;

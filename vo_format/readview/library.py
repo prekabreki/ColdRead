@@ -22,6 +22,7 @@ from __future__ import annotations
 import datetime
 import html
 import pathlib
+import re
 import sys
 from typing import NamedTuple, Sequence
 
@@ -39,12 +40,44 @@ UNFILED = "Unfiled"
 _SEPARATOR = " — "
 _SUFFIX = " - readview.html"
 
+#: `render.py` stamps the word count on <body>. Reading it back is the only way
+#: the index can show length: the filename does not carry it, and inventing a
+#: second place to record it would give the two ends something to drift on.
+_WORDS_RE = re.compile(r'data-words="(\d+)"')
+
+#: How much of a read-view to read looking for the count. The attribute sits on
+#: <body>, currently ~4.3KB in, behind the inlined CSS; everything that scales
+#: with the script — the lines themselves — comes after it, which is what makes
+#: a bounded read worth having on a memory-tight Pi. A bounded read also means a
+#: truncated or half-written file cannot break the index. The headroom over the
+#: real offset is deliberate and pinned by a test: the CSS grows ahead of the
+#: attribute, and a prefix that fell short would show no lengths at all while
+#: every row still rendered perfectly.
+_PREFIX_BYTES = 16384
+
 
 class IndexEntry(NamedTuple):
     channel: str  # the raw prefix from the filename, not the display label
     title: str
     filename: str
     date: str  # ISO date the read-view was derived
+    words: int | None = None  # None when the read-view carries no count
+
+
+def words_in(path: pathlib.Path) -> int | None:
+    """Read the word count `render.py` stamped on this read-view's <body>.
+
+    Returns None for anything unexpected — an older read-view, a file being
+    written as we look at it, something that is not a read-view at all. A row
+    without a length is worth far more than an index that fails to render.
+    """
+    try:
+        with path.open("rb") as handle:
+            head = handle.read(_PREFIX_BYTES)
+    except OSError:
+        return None
+    match = _WORDS_RE.search(head.decode("utf-8", "replace"))
+    return int(match.group(1)) if match else None
 
 
 def entry_for(path: pathlib.Path) -> IndexEntry:
@@ -60,7 +93,13 @@ def entry_for(path: pathlib.Path) -> IndexEntry:
     if rest.endswith(_SUFFIX):
         rest = rest[: -len(_SUFFIX)]
     when = datetime.date.fromtimestamp(path.stat().st_mtime).isoformat()
-    return IndexEntry(channel=channel, title=rest, filename=path.name, date=when)
+    return IndexEntry(
+        channel=channel,
+        title=rest,
+        filename=path.name,
+        date=when,
+        words=words_in(path),
+    )
 
 
 def _grouped(entries: Sequence[IndexEntry]) -> list[tuple[str, list[IndexEntry]]]:
@@ -85,10 +124,14 @@ def _row(entry: IndexEntry, position: int) -> str:
     # that was read. data-i is the row's place in title order, so unmarking can
     # put it back where it belongs instead of leaving it at the bottom.
     key = html.escape(entry.filename)
+    # Length leads the sub-line: it is what decides whether a script fits the
+    # time available, which is the question the library page gets asked.
+    facts = [] if entry.words is None else [f"{entry.words:,} words"]
+    facts.append(html.escape(entry.date))
     return (
         f'<li data-key="{key}" data-i="{position}"><div class="row">'
         f'<a href="{key}"><b>{html.escape(entry.title)}</b>'
-        f"<span>{html.escape(entry.date)}</span></a>"
+        f'<span>{" &middot; ".join(facts)}</span></a>'
         '<button class="check" type="button" aria-label="Mark read or unread"'
         ">&#10003;</button></div></li>"
     )

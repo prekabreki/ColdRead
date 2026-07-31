@@ -106,7 +106,7 @@ maximum-scale=1, viewport-fit=cover">
 </style>
 </head>
 <body data-words-per-line="{script.words_per_line:.1f}" data-title="{title}"\
-{library_attr}>
+ data-words="{script.word_count}"{library_attr}>
 <div class="zone" id="slower">&minus;</div>
 <div class="zone" id="faster">+</div>
 <div id="script">

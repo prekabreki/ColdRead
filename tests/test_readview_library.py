@@ -15,17 +15,37 @@ from pathlib import Path
 
 import pytest
 
-from vo_format.readview.library import IndexEntry, main, render_index
+from vo_format.readview.library import (
+    _PREFIX_BYTES,
+    IndexEntry,
+    main,
+    render_index,
+    words_in,
+)
 
 LIBRARY_PY = Path(__file__).resolve().parents[1] / "vo_format" / "readview" / "library.py"
 
 
-def _entry(channel: str, title: str, date: str = "2026-07-31") -> IndexEntry:
+def _entry(
+    channel: str, title: str, date: str = "2026-07-31", words: int | None = None
+) -> IndexEntry:
     return IndexEntry(
         channel=channel,
         title=title,
         filename=f"{channel} — {title} - readview.html",
         date=date,
+        words=words,
+    )
+
+
+def _readview(words: int | None) -> str:
+    """A read-view's opening bytes, as `render.py` writes them."""
+    attr = "" if words is None else f' data-words="{words}"'
+    return (
+        '<!doctype html>\n<html lang="en" data-theme="dark">\n<head>\n'
+        "<title>A v1</title>\n<style>body{margin:0}</style>\n</head>\n"
+        f'<body data-words-per-line="7.0" data-title="A v1"{attr}>\n'
+        '<div id="script"></div>\n</body></html>\n'
     )
 
 
@@ -171,6 +191,103 @@ class TestRowsCarryWhatTheHandlerNeeds:
     def test_the_date_is_shown(self):
         html = render_index([_entry("CassetteLore", "Thing - formatted", date="2026-01-09")])
         assert "2026-01-09" in html
+
+
+class TestLength:
+    """Length is what decides whether a script fits the time available."""
+
+    def test_word_count_is_shown_with_thousands_separators(self):
+        html = render_index([_entry("CassetteLore", "Thing - formatted", words=1340)])
+        assert "1,340 words" in html
+
+    def test_length_leads_the_sub_line_ahead_of_the_date(self):
+        html = render_index(
+            [_entry("CassetteLore", "Thing - formatted", date="2026-01-09", words=1340)]
+        )
+        # Both facts on one line, length first. Asserting order rather than mere
+        # presence: a row that rendered them in two places would still pass a
+        # containment check.
+        assert "1,340 words &middot; 2026-01-09" in html
+
+    def test_a_missing_count_degrades_to_the_date_alone(self):
+        html = render_index(
+            [_entry("CassetteLore", "Thing - formatted", date="2026-01-09", words=None)]
+        )
+        assert "<span>2026-01-09</span>" in html
+        assert "words" not in html
+        # And the row is still reachable, which is the whole point of degrading.
+        assert "<b>Thing - formatted</b>" in html
+
+    def test_a_zero_count_is_shown_rather_than_treated_as_missing(self):
+        # 0 is falsy. A read-view that really did extract no words should say so,
+        # not silently look like an older file that carries no count at all.
+        html = render_index([_entry("CassetteLore", "Empty - formatted", words=0)])
+        assert "0 words" in html
+
+
+class TestWordsIn:
+    def test_reads_the_count_render_stamped_on_the_body(self, tmp_path: Path):
+        path = tmp_path / "a - readview.html"
+        path.write_text(_readview(1340), encoding="utf-8")
+        assert words_in(path) == 1340
+
+    def test_an_older_readview_without_the_attribute_yields_none(self, tmp_path: Path):
+        path = tmp_path / "a - readview.html"
+        path.write_text(_readview(None), encoding="utf-8")
+        assert words_in(path) is None
+
+    def test_a_non_numeric_attribute_yields_none(self, tmp_path: Path):
+        path = tmp_path / "a - readview.html"
+        path.write_text(_readview(None).replace("data-title", 'data-words="lots" data-title'))
+        assert words_in(path) is None
+
+    def test_a_file_that_is_not_a_readview_yields_none(self, tmp_path: Path):
+        path = tmp_path / "a - readview.html"
+        path.write_text("<html><body>nothing here</body></html>", encoding="utf-8")
+        assert words_in(path) is None
+
+    def test_an_unreadable_file_yields_none_rather_than_raising(self, tmp_path: Path):
+        # The index must render even if one read-view cannot be opened; a
+        # directory standing in for a file is the cheapest way to force that.
+        assert words_in(tmp_path / "not-a-file") is None
+        (tmp_path / "dir - readview.html").mkdir()
+        assert words_in(tmp_path / "dir - readview.html") is None
+
+    def test_undecodable_bytes_do_not_raise(self, tmp_path: Path):
+        # A prefix read can slice a multi-byte character in half. Errors are
+        # replaced, not raised, and the count on the same line still comes back.
+        path = tmp_path / "a - readview.html"
+        path.write_bytes(b'<body data-title="\xff\xfe" data-words="42">')
+        assert words_in(path) == 42
+
+    def test_only_a_bounded_prefix_is_read(self, tmp_path: Path):
+        # The read is bounded so the index pass over a whole directory does not
+        # depend on pulling every script's body into memory on the Pi. A count
+        # buried past the bound is missed; that is the accepted trade.
+        #
+        # The padding is DERIVED from the bound, not a number that happens to
+        # exceed today's value - hard-coding it made this test pass for the wrong
+        # reason the moment the bound was raised.
+        path = tmp_path / "a - readview.html"
+        padding = "x" * (_PREFIX_BYTES + 512)
+        path.write_text(f"<!-- {padding} -->" + _readview(1340), encoding="utf-8")
+        assert words_in(path) is None
+
+
+class TestLengthEndToEnd:
+    def test_main_shows_the_count_from_the_files_on_disk(self, tmp_path: Path):
+        (tmp_path / "CassetteLore — A v1 - formatted - readview.html").write_text(
+            _readview(2500), encoding="utf-8"
+        )
+        (tmp_path / "CassetteLore — B v1 - formatted - readview.html").write_text(
+            _readview(None), encoding="utf-8"
+        )
+        main(str(tmp_path))
+        html = (tmp_path / "index.html").read_text(encoding="utf-8")
+        assert "2,500 words" in html
+        # The countless one still gets a row rather than disappearing.
+        assert "<b>B v1 - formatted</b>" in html
+        assert html.count("words") == 1
 
 
 class TestSelfContainment:

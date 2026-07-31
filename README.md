@@ -104,9 +104,20 @@ The output has no external references of any kind — all CSS, JS, and the
 keep-awake video are inlined — so it works with the network off.
 
 **Controls:** hold a finger on the text to freeze it, drag to reposition, lift to
-resume. The unlabelled left and right edge strips step the speed in words per
-minute. `A−`/`A+` set type size. Space, arrow keys and Page Up/Down do the same
-from a keyboard, which is also how a Bluetooth foot pedal reaches it.
+resume. A quick flick glides on and settles instead of stopping dead; putting a
+finger back down stops it where it is. The unlabelled left and right edge strips
+step the speed in words per minute. `A−`/`A+` set type size. Space, arrow keys and
+Page Up/Down do the same from a keyboard, which is also how a Bluetooth foot pedal
+reaches it.
+
+The HUD shows how far through the script you are, as a percentage beside the wpm
+and as a fill along its top edge.
+
+**Resume mark:** press and hold a word for half a second to mark where you
+stopped. It highlights amber, survives closing the page, and reopening the script
+scrolls straight back to it with a little run-up above. Press it again to clear
+it, or hold a different word to move it — there is only ever one. Publishing a new
+draft starts clean, since the mark is stored against the filename's version.
 
 Re-running skips any page whose HTML is already strictly newer than its PDF;
 pass `--force` to re-render anyway.

@@ -11,6 +11,7 @@ import re
 import pytest
 
 from vo_format.models import Archetype
+from vo_format.readview import library
 from vo_format.readview.extract import ReadLine, ReadScript, extract_lines
 from vo_format.readview.render import render
 from vo_format.readview.theme import DARK_MAP
@@ -101,6 +102,37 @@ class TestStructure:
     def test_words_per_line_reaches_the_client(self) -> None:
         script = _script([_line("one two three"), _line("four five six")])
         assert 'data-words-per-line="3.0"' in render(script)
+
+    def test_word_count_is_stamped_where_the_library_index_can_read_it(self) -> None:
+        """library.py greps `data-words` back out of the served file.
+
+        That is the whole contract between the two modules, and the one thing
+        that can break the library's length column silently: dropping the
+        attribute leaves every row rendering fine, just without a length.
+        """
+        script = _script([_line("one two three"), _line("four five six")])
+        assert 'data-words="6"' in render(script)
+
+    def test_the_word_count_sits_inside_the_prefix_the_index_reads(self) -> None:
+        """`library.py` reads a bounded prefix, so the attribute must be in it.
+
+        The inlined CSS grows ahead of the attribute, so this is a live
+        constraint rather than a formality — and its failure mode is silent: an
+        attribute past the bound leaves every library row rendering perfectly,
+        just with no length on it.
+        """
+        html = render(_script([_line("x")]))
+        assert html.index('data-words="1"') < library._PREFIX_BYTES
+
+    def test_the_progress_bar_is_wired_to_the_property_reader_js_sets(self) -> None:
+        # reader.js paints completeness by setting --progress on the root; the
+        # bar is a pseudo-element rather than a real one so there is nothing to
+        # be missing. If either half of that pairing is renamed, the bar silently
+        # stops moving while everything else keeps working.
+        html = render(_script([_line("x")]))
+        assert "#hud::after" in html
+        assert "var(--progress" in html
+        assert '"--progress"' in html
 
     def test_title_and_derived_date_are_shown(self) -> None:
         html = render(_script([_line("x")], title="Kingdom Hearts Dark Road"))
