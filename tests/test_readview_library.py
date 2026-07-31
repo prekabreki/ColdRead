@@ -148,6 +148,22 @@ class TestRowsCarryWhatTheHandlerNeeds:
         assert 'data-channel="CassetteLore"' in html
         assert 'data-channel="Birds of Play"' in html
 
+    def test_rows_carry_their_position_within_the_channel(self):
+        # Unmarking a script puts it back in title order rather than leaving it
+        # at the bottom, which needs the original position on each row.
+        html = render_index(
+            [
+                _entry("CassetteLore", "Bravo - formatted"),
+                _entry("CassetteLore", "Alpha - formatted"),
+                _entry("Birds of Play", "Solo - formatted"),
+            ]
+        )
+        cl = _section(html, "Cassette Lore")
+        assert re.findall(r'data-i="(\d+)"', cl) == ["0", "1"]
+        # Sorted by title, so Alpha is position 0 even though it was listed last.
+        assert cl.index('data-i="0"') < cl.index("Bravo")
+        assert re.findall(r'data-i="(\d+)"', _section(html, "Birds of Play")) == ["0"]
+
     def test_every_row_has_a_toggle_target(self):
         html = render_index(REAL_ENTRIES)
         assert len(re.findall(r'class="check"', html)) == len(REAL_ENTRIES)
@@ -204,7 +220,10 @@ class TestMain:
         (tmp_path / "loose-script - readview.html").write_text("x")
         main(str(tmp_path))
         html = (tmp_path / "index.html").read_text(encoding="utf-8")
-        assert "loose-script" in html
+        # Asserting on the display title, not merely on the string appearing
+        # somewhere: the href alone would satisfy that while the row rendered
+        # blank.
+        assert "<b>loose-script</b>" in html
 
     @pytest.mark.parametrize("variant", ["formatted", "batched"])
     def test_variant_survives_into_the_title(self, tmp_path: Path, variant: str):
