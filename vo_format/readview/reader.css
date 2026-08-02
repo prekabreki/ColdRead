@@ -157,6 +157,26 @@ mark.resume {
   pointer-events: none;
 }
 
+/* Edge speed strips — a secondary eyes-free path for ± WPM. They sit at the
+   left and right edges, full-height, so a tap anywhere along the edge of the
+   screen works without looking. Resting at 0.28 so they register as "something
+   is there" without calling attention during a read; 0.22 was invisible in the
+   booth. .zone-hint pulses them to prominence on first load and fades back. */
+.zone {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  width: 28px;
+  z-index: 9;
+  opacity: 0.28;
+  transition: opacity 1.5s ease;
+  pointer-events: auto;
+}
+.zl { left: 0; }
+.zr { right: 0; }
+
+.zone-hint { opacity: 0.55; }
+
 #awake {
   position: fixed;
   width: 1px;

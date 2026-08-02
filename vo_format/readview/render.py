@@ -32,6 +32,33 @@ def _split_variant(title: str) -> tuple[str, str]:
     return title[: match.start()], match.group(1).lower()
 
 
+def _title_matches(first_lines: list[ReadLine], display: str) -> bool:
+    """Check whether the first one or two PDF lines repeat the display title.
+
+    Case-insensitive, whitespace-collapsed. Tolerates a title that was line-
+    wrapped onto two lines in the PDF (e.g. "The Complete Story of Kingdom
+    Hearts Dark" / "Road").
+    """
+    if not first_lines:
+        return False
+    normalized = _normalize_title(display)
+
+    one = _normalize_title(first_lines[0].text)
+    if one == normalized:
+        return True
+
+    if len(first_lines) >= 2:
+        two = one + " " + _normalize_title(first_lines[1].text)
+        if two == normalized:
+            return True
+
+    return False
+
+
+def _normalize_title(text: str) -> str:
+    return re.sub(r"\s+", " ", text.strip().lower())
+
+
 def _asset(name: str) -> str:
     return (files(__package__) / name).read_text(encoding="utf-8")
 
@@ -90,6 +117,12 @@ def render(
     display, variant = _split_variant(script.title)
     display = escape(display)
     variant_suffix = f" &middot; {variant} cut" if variant else ""
+    suppress_heading = _title_matches(script.lines, display)
+    heading_html = (
+        f'<p class="hdr l b" style="font-size:1.4em">{display}</p>'
+        if not suppress_heading
+        else ""
+    )
     lines = "\n".join(_line_html(line) for line in script.lines)
     # The button lives in #hud on purpose. The touch handler exempts #hud from
     # the freeze-and-drag gesture, so a control placed anywhere else would scrub
@@ -127,8 +160,10 @@ maximum-scale=1, viewport-fit=cover">
 </head>
 <body data-words-per-line="{script.words_per_line:.1f}" data-title="{title}"\
  data-words="{script.word_count}"{library_attr}{sync_attr}>
+<div class="zone zl" aria-hidden="true"></div>
+<div class="zone zr" aria-hidden="true"></div>
 <div id="script">
-<p class="hdr l b" style="font-size:1.4em">{display}</p>
+{heading_html}
 <p class="hdr l i">{len(script.lines)} lines &middot; {script.word_count} words \
 &middot; derived {escape(script.derived[:10])}{variant_suffix}</p>
 {lines}
