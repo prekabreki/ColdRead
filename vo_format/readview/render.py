@@ -56,7 +56,11 @@ def _title_matches(first_lines: list[ReadLine], display: str) -> bool:
 
 
 def _normalize_title(text: str) -> str:
-    return re.sub(r"\s+", " ", text.strip().lower())
+    text = text.strip().lower()
+    text = re.sub(r"\bep(\d+)\b", r"episode \1", text)
+    text = re.sub(r"\s+-\s+", " ", text)
+    text = re.sub(r"\s+v\d+(?:\.\d+)?$", "", text)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def _asset(name: str) -> str:

@@ -296,6 +296,54 @@ class TestStructure:
         assert "words" in html.split("</style>")[1].split('<p class="l"')[0]
         assert "derived" in html.split("</style>")[1].split('<p class="l"')[0]
 
+    def test_heading_is_suppressed_when_filename_has_ep_abbreviation(self) -> None:
+        """Ep1 (filename) must match Episode 1 (PDF line)."""
+        html = render(
+            _script(
+                [_line("Bloodborne Episode 1 Blood Ministry v1.1", size_ratio=1.3, bold=True),
+                 _line("The hunter awoke.")],
+                title="Bloodborne Ep1 - Blood Ministry - formatted",
+            )
+        )
+        assert ">Bloodborne Episode 1 Blood Ministry v1.1</p>" in html
+        assert 'class="hdr l b"' not in html
+
+    def test_heading_is_suppressed_when_pdf_has_trailing_version(self) -> None:
+        """A PDF line ending in v5 must match a display title without it."""
+        html = render(
+            _script(
+                [_line("Warhammer 40K Episode 4 The Burning v5", size_ratio=1.3, bold=True),
+                 _line("The planet burned.")],
+                title="Warhammer 40K Ep4 - The Burning",
+            )
+        )
+        assert "Warhammer 40K Episode 4 The Burning v5" in html
+        assert 'class="hdr l b"' not in html
+
+    def test_heading_is_suppressed_when_filename_has_dash_separators(self) -> None:
+        """  -   separators in filename must match plain spaces in PDF line."""
+        html = render(
+            _script(
+                [_line("Disco Elysium Episode 1 The Officer in the Mirror", size_ratio=1.3, bold=True),
+                 _line("The detective opened his eyes.")],
+                title="Disco Elysium Ep1 - The Officer in the Mirror",
+            )
+        )
+        assert "Disco Elysium Episode 1 The Officer in the Mirror" in html
+        assert 'class="hdr l b"' not in html
+
+    def test_heading_is_kept_when_pdf_starts_with_batch_header(self) -> None:
+        """A BATCH n: header must never suppress the heading."""
+        html = render(
+            _script(
+                [_line("BATCH 1: ALFRED", size_ratio=1.3, bold=True),
+                 _line("The hunter awoke.")],
+                title="Bloodborne Ep1 - Blood Ministry - batched",
+            )
+        )
+        assert 'class="hdr l b"' in html
+        assert "Bloodborne Ep1 - Blood Ministry</p>" in html
+
     def test_pdf_content_lines_are_always_present(self) -> None:
         for title in ("Kingdom Hearts Dark Road", "Something Else"):
             html = render(
