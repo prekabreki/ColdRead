@@ -11,8 +11,8 @@ Issue tracking is via GitHub Issues.
 ## Common commands
 
 ```bash
-# Install in editable mode (Python 3.10+)
-pip install -e .
+# Install in editable mode with dev extras — ruff, mypy, pytest (Python 3.10+)
+pip install -e ".[dev]"
 
 # Run the CLI
 python -m vo_format.cli <script> [flags]
