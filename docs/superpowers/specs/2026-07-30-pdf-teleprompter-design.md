@@ -238,7 +238,7 @@ Without intervention the iPad dims and sleeps mid-read. That is the difference
 between a teleprompter and a demo, so it needs to actually work.
 
 **The Screen Wake Lock API requires a secure context.** Neither delivery path
-here provides one: `file://` is an opaque origin, and `http://192.168.50.181:8765`
+here provides one: `file://` is an opaque origin, and `http://<pi-lan-ip>:8765`
 is plain HTTP on a LAN address. So `navigator.wakeLock` will be **undefined in
 both Phase 1 and Phase 2**, and a design that relied on it would fail in the
 booth, not in testing.
@@ -337,12 +337,12 @@ token is real even on a LAN.
 Three subtleties, on the record so they are not rediscovered:
 
 - **The token does real work.** The Pi is a tailnet node
-  (`100.117.152.52`), so this is reachable from anywhere, not only the home
+  (`<pi-tailnet-ip>`), so this is reachable from anywhere, not only the home
   wifi. "It's only on my LAN" stopped being a defense the moment the Pi became
   the host.
 - **Strict `Host` equality does not fit.** The usual loopback recipe pins `Host`
   to one exact value, but this server has three legitimate names:
-  `raspberrypi.local`, `192.168.50.181`, and the tailnet address. `Host` is
+  `raspberrypi.local`, `<pi-lan-ip>`, and the tailnet address. `Host` is
   therefore checked against a configured allowlist seeded from the addresses
   detected at startup, and `Origin` / `Sec-Fetch-Site` are rejected when present
   and not same-origin. Absence is allowed — a bookmark tap sends neither.
