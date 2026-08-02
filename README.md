@@ -129,6 +129,35 @@ draft starts clean, since the mark is stored against the filename's version.
 Re-running skips any page whose HTML is already strictly newer than its PDF;
 pass `--force` to re-render anyway.
 
+**Shared read state (optional):** resume marks, which scripts are finished, and
+the per-script speed live in the browser's local storage, which means they live
+in one browser. `coldread-state` is a small service that keeps them in a single
+JSON file instead, so a mark set on the phone is there on the desktop. It is
+entirely optional and does nothing unless a page is pointed at it: without it the
+read-view behaves exactly as described above, keeps everything locally, and still
+works with the network off.
+
+```bash
+coldread-state --state-file /path/to/state.json \
+               --token-file /path/to/state.token
+# --check validates the paths and the token, then exits without serving
+```
+
+It imports nothing outside the Python standard library, so it can run on whatever
+box already serves the pages — a Raspberry Pi, or anything else cheap and always
+on, with nothing installed on it.
+
+It wants to sit on the same origin as the library. Put it behind the same web
+server at a path like `/state`, then point the read-view at that path with
+`coldread-readview --sync /state`. The page's request is then same-origin, which
+is what carries the token cookie with it and lets the service turn away a request
+that came from somewhere else. It binds `127.0.0.1` by default for the same
+reason: the proxy is meant to be the only thing that reaches it. The token is
+generated on first run into `--token-file`, and loading `/state?k=<token>` once
+sets the cookie the pages use from then on. Those pages want a real HTTPS origin
+regardless of the state service; if the box has no public DNS name, something
+like Tailscale is one way to get it a certificate.
+
 ## How it works
 
 Extract the text, ask Claude for a structural read of the script (returned as JSON only), resolve the toggles, format deterministically in Python, then render the PDF with ReportLab. Claude classifies; it never rewrites. That split is deliberate: the same script and toggles always produce the same PDF, and your words come out exactly as you wrote them.

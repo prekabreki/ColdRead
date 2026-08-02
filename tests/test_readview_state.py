@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import ast
 import http.client
 import json
 import pathlib
+import sys
 import threading
 
 import pytest
@@ -21,6 +23,10 @@ from vo_format.readview.state import (
 )
 
 TOKEN = "t" * 43
+
+STATE_PY = (
+    pathlib.Path(__file__).resolve().parents[1] / "vo_format" / "readview" / "state.py"
+)
 
 
 class TestClampAge:
@@ -375,3 +381,29 @@ class TestMainRefusesRatherThanDegrading:
         )
         assert code != 0
         assert "nope" in capsys.readouterr().err
+
+
+class TestSelfContainment:
+    """It runs on the serving host with nothing installed."""
+
+    def test_module_imports_only_the_stdlib(self):
+        # Same assertions as the library page's guard, but the names are read
+        # with ast rather than a regex: state.py's docstrings contain prose
+        # lines beginning "from …", which a line-anchored regex reads as an
+        # import and fails on.
+        source = STATE_PY.read_text(encoding="utf-8")
+        imports = []
+        for node in ast.walk(ast.parse(source)):
+            if isinstance(node, ast.Import):
+                imports.extend(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                # A relative import is a package import spelt shorter, and it
+                # would need the package installed on the serving host.
+                imports.append("." * node.level + (node.module or ""))
+        assert imports, "no imports found - did the file move?"
+        for name in imports:
+            root = name.split(".")[0]
+            assert root != "vo_format", (
+                f"the state service must not import the package: {name}"
+            )
+            assert root in sys.stdlib_module_names, f"non-stdlib import: {name}"
