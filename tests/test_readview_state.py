@@ -6,7 +6,6 @@ import http.client
 import json
 import pathlib
 import threading
-from http.server import ThreadingHTTPServer
 
 import pytest
 
@@ -14,6 +13,7 @@ from vo_format.readview.state import (
     MAX_AGE_MS,
     Clock,
     Store,
+    _StateServer,
     apply_patch,
     clamp_age,
     make_handler,
@@ -219,7 +219,11 @@ class _Server:
         store = Store(tmp_path / "state.json")
         store.load()
         handler = make_handler(store, TOKEN, threading.Lock())
-        self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        # The same server class `serve()` uses, not a bare ThreadingHTTPServer:
+        # that one carries SO_REUSEADDR, which on Windows lets a bind land on a
+        # port something else is already listening on. A fixture that can be
+        # answered by the wrong listener fails in a way nobody can read.
+        self.httpd = _StateServer(("127.0.0.1", 0), handler)
         self.port = self.httpd.server_address[1]
         # A short poll interval only so `shutdown()` is noticed promptly:
         # the default 0.5s would add half a second of teardown to every test
@@ -335,3 +339,39 @@ class TestHttp:
         captured = capsys.readouterr()
         assert TOKEN not in captured.err
         assert TOKEN not in captured.out
+
+
+class TestToken:
+    def test_it_creates_a_token_on_first_run(self, tmp_path: pathlib.Path) -> None:
+        from vo_format.readview.state import load_or_create_token
+
+        path = tmp_path / "token"
+        token = load_or_create_token(path)
+        assert len(token) >= 43  # 256 bits, urlsafe-base64
+        assert path.read_text(encoding="utf-8").strip() == token
+
+    def test_it_reuses_an_existing_token(self, tmp_path: pathlib.Path) -> None:
+        from vo_format.readview.state import load_or_create_token
+
+        path = tmp_path / "token"
+        assert load_or_create_token(path) == load_or_create_token(path)
+
+
+class TestMainRefusesRatherThanDegrading:
+    def test_an_unwritable_state_directory_is_named_and_non_zero(
+        self, tmp_path: pathlib.Path, capsys
+    ) -> None:
+        from vo_format.readview.state import main
+
+        missing = tmp_path / "nope" / "deeper" / "state.json"
+        code = main(
+            [
+                "--state-file",
+                str(missing),
+                "--token-file",
+                str(tmp_path / "token"),
+                "--check",
+            ]
+        )
+        assert code != 0
+        assert "nope" in capsys.readouterr().err

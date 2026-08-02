@@ -13,10 +13,12 @@ having to trust anyone's clock.
 
 from __future__ import annotations
 
+import argparse
 import hmac
 import json
 import os
 import pathlib
+import secrets
 import sys
 import threading
 import time
@@ -317,8 +319,116 @@ def make_handler(store: Store, token: str, lock: threading.Lock) -> type:
     return Handler
 
 
+class _StateServer(ThreadingHTTPServer):
+    """`ThreadingHTTPServer` that actually refuses a port already in use.
+
+    `http.server` sets `allow_reuse_address = 1`, which on POSIX only relaxes
+    TIME_WAIT — the reason it is wanted, so a restart is not blocked for a
+    minute. On Windows SO_REUSEADDR means something else entirely: it lets a
+    second process bind a port another process is *actively listening on*. The
+    bind then succeeds, two services claim the port, and which one answers is
+    undefined — precisely the "appears to start" failure the spec rates as worse
+    than dying. Off on Windows, unchanged everywhere else.
+    """
+
+    allow_reuse_address = os.name != "nt"
+
+
 def serve(store: Store, token: str, host: str, port: int) -> None:
     handler = make_handler(store, token, threading.Lock())
-    httpd = ThreadingHTTPServer((host, port), handler)
+    httpd = _StateServer((host, port), handler)
     print(f"state: serving {store.path} on http://{host}:{port}/state")
     httpd.serve_forever()
+
+
+def load_or_create_token(path: pathlib.Path) -> str:
+    """The shared token, generated once and reused.
+
+    256 bits. The host is reachable from wherever its private network reaches,
+    so "it is only on my LAN" is not a defence — see the spec.
+    """
+    path = pathlib.Path(path)
+    try:
+        existing = path.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        existing = ""
+    if existing:
+        return existing
+    token = secrets.token_urlsafe(32)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(token + "\n", encoding="utf-8")
+    try:
+        path.chmod(0o600)  # best effort; a no-op on some filesystems
+    except OSError:
+        pass
+    return token
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="coldread-state",
+        description="Serve shared read state for a ColdRead read-view library.",
+    )
+    parser.add_argument("--state-file", required=True, type=pathlib.Path)
+    parser.add_argument("--token-file", required=True, type=pathlib.Path)
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8766)
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="validate configuration and exit without serving",
+    )
+    args = parser.parse_args(argv)
+
+    # Loud, named, non-zero. The failure this guards against is a service that
+    # starts, answers 200, and quietly discards every write.
+    #
+    # The directory is NOT created here: a mistyped path is far likelier than a
+    # deliberately absent one, and silently conjuring `…/nope/deeper/` would
+    # serve state from somewhere nobody is looking. Refusing names the typo.
+    parent = args.state_file.parent
+    try:
+        probe = parent / ".coldread-state-write-probe"
+        probe.write_text("", encoding="utf-8")
+        probe.unlink()
+    except OSError as exc:
+        print(
+            f"error: cannot write beside {args.state_file} ({exc})",
+            file=sys.stderr,
+        )
+        return 2
+
+    try:
+        token = load_or_create_token(args.token_file)
+    except OSError as exc:
+        print(
+            f"error: token file {args.token_file} unusable ({exc})",
+            file=sys.stderr,
+        )
+        return 2
+
+    store = Store(args.state_file)
+    store.load()
+    if args.check:
+        print(
+            f"ok    {args.state_file} writable, token loaded, would bind "
+            f"{args.host}:{args.port}"
+        )
+        return 0
+    try:
+        serve(store, token, args.host, args.port)
+    except OSError as exc:
+        print(
+            f"error: cannot bind {args.host}:{args.port} ({exc})",
+            file=sys.stderr,
+        )
+        return 2
+    return 0
+
+
+def _entry() -> None:
+    raise SystemExit(main())
+
+
+if __name__ == "__main__":
+    _entry()
