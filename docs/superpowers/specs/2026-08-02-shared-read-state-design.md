@@ -171,8 +171,14 @@ Guards, both cheap and both closing a real class of bug:
 - `age_ms` missing, negative (the device's clock moved backwards) or non-numeric →
   treated as `0`. Clamped above at `MAX_AGE` (7 days) so a bad value cannot write
   arbitrarily far into the past.
-- The server never issues a stamp less than or equal to the highest it has already
-  issued, so an NTP correction on the host cannot reorder history.
+- **The monotonic guard applies to the server's reading of `now`, not to the
+  finished stamp.** Those are different, and conflating them breaks the feature:
+  a stamp is *deliberately* back-dated by `age_ms`, so a rule like "never issue a
+  stamp below the highest issued" would forbid exactly the back-dating that
+  preserves action order. The guard is therefore
+  `now = max(clock_now, last_now + 1)`, which makes the *base* monotonic; the age
+  is then subtracted from it. An NTP correction on the host cannot reorder
+  history, and a late flush can still land in the past where it belongs.
 
 **Merge rule:** apply an incoming field only if its computed `t` is greater than
 the stored `t`. Equal loses, so a replayed flush is idempotent.

@@ -318,20 +318,22 @@ Expected: pass, except the pre-existing Windows cp1252 failure.
 Run: `./.venv/bin/ruff check vo_format tests`
 Expected: clean.
 
-- [ ] **Step 7: Verify the clock formatter by hand and record it**
+- [ ] **Step 7: Note the formatter cases for the reviewer — do not run them yourself**
 
-There is no JS test runner here and this task does not add one. Open a rendered
-read-view in a browser, and in the console check the three values that exercise
-the padding and the hour boundary:
+There is no JS test runner here and this task does not add one, so the three
+values that exercise zero-padding and the hour boundary cannot be checked from
+the worktree:
 
 ```js
-clockText(7)      // "0:07"
-clockText(599)    // "9:59"
-clockText(3600)   // "1:00:00"
+clockText(7)      // expect "0:07"
+clockText(599)    // expect "9:59"
+clockText(3600)   // expect "1:00:00"
 ```
 
-Paste those three results into the PR description. A formatter that drops the
-zero-pad reads as `9:5` and looks like a rendering bug rather than a logic one.
+**List these three expectations in the PR description as unverified.** Do not
+attempt to run them — a browser is not available in an executor worktree, and
+reaching outside it for one is how a session gets killed with the work lost.
+Confirming them is the reviewer's gate.
 
 - [ ] **Step 8: Commit**
 
@@ -377,25 +379,30 @@ Run: `grep -n -i "strip\|edge\|zone\|wpm\|percentage" README.md`
 
 Read each hit and confirm it still matches the shipped page. Fix any that do not.
 
-- [ ] **Step 3: Confirm on the device it is for**
-
-Serve a rendered read-view over HTTP and open it at iPad portrait size
-(834×1194). Confirm, and put the screenshot in the PR:
-
-1. The cluster is at the bottom-right, above the HUD, `−` above `+`, both
-   comfortably tappable.
-2. **Pressing and holding either button does not move the script.** This is the
-   one regression the DOM tests cannot see: if the cluster ended up outside
-   `#hud`, the page still looks correct and the script scrubs under your finger.
-3. Holding `+` ramps the wpm rather than stepping once.
-4. The countdown falls as the script scrolls and jumps when you change wpm.
-
-- [ ] **Step 4: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
 git add README.md
 git commit -m "Correct the README's read-view controls after the HUD regroup"
 ```
+
+---
+
+## Human review gate
+
+These cannot be checked from a worktree and are deliberately not any task's
+steps. An implementer that reaches outside the repo for a browser or a device
+risks losing the whole session's work for a check it was never meant to run.
+
+- [ ] On a served read-view at iPad portrait size (834×1194): the cluster sits
+      bottom-right above the HUD, `−` above `+`, both comfortably tappable.
+- [ ] **Pressing and holding either button does not move the script.** The one
+      regression no DOM test can see: a cluster that ended up outside `#hud`
+      renders correctly and scrubs the script under your finger.
+- [ ] Holding `+` ramps the wpm rather than stepping once.
+- [ ] The countdown falls as the script scrolls, and jumps when wpm changes.
+- [ ] `clockText(7)` → `0:07`, `clockText(599)` → `9:59`, `clockText(3600)` →
+      `1:00:00` in the browser console.
 
 ---
 

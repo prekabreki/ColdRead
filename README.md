@@ -56,6 +56,9 @@ cd ColdRead
 python -m venv .venv
 source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -e .
+
+# Or, if you plan to run the test suite or the linters:
+pip install -e ".[dev]"
 ```
 
 That gives you the `coldread-gui` and `coldread` commands. Launch the GUI with `coldread-gui`, or double-click `launch.bat` / run `./launch.sh` — the launcher finds your install (or a built bundle) and tells you what's missing instead of failing silently.
