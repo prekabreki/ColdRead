@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import http.client
 import json
 import pathlib
+import threading
+from http.server import ThreadingHTTPServer
 
 import pytest
 
@@ -13,8 +16,11 @@ from vo_format.readview.state import (
     Store,
     apply_patch,
     clamp_age,
+    make_handler,
     merge_field,
 )
+
+TOKEN = "t" * 43
 
 
 class TestClampAge:
@@ -204,3 +210,128 @@ class TestStore:
         fresh = Store(path)
         fresh.load()
         assert set(fresh.fields["read"]) == {"a.html", "b.html"}
+
+
+class _Server:
+    """A live server on an ephemeral port, for one test."""
+
+    def __init__(self, tmp_path: pathlib.Path) -> None:
+        store = Store(tmp_path / "state.json")
+        store.load()
+        handler = make_handler(store, TOKEN, threading.Lock())
+        self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        self.port = self.httpd.server_address[1]
+        # A short poll interval only so `shutdown()` is noticed promptly:
+        # the default 0.5s would add half a second of teardown to every test
+        # here, which is most of the suite's runtime for no benefit.
+        self.thread = threading.Thread(
+            target=self.httpd.serve_forever, kwargs={"poll_interval": 0.02},
+            daemon=True,
+        )
+        self.thread.start()
+
+    def request(
+        self,
+        method: str,
+        path: str,
+        body: str | None = None,
+        headers: dict | None = None,
+    ) -> tuple[int, str]:
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)
+        try:
+            conn.request(method, path, body=body, headers=headers or {})
+            response = conn.getresponse()
+            return response.status, response.read().decode("utf-8")
+        finally:
+            conn.close()
+
+    def close(self) -> None:
+        self.httpd.shutdown()
+        self.httpd.server_close()
+
+
+@pytest.fixture
+def server(tmp_path: pathlib.Path):
+    live = _Server(tmp_path)
+    yield live
+    live.close()
+
+
+class TestHttp:
+    def test_get_with_the_token_returns_a_snapshot(self, server) -> None:
+        status, body = server.request("GET", f"/state?k={TOKEN}")
+        assert status == 200
+        assert set(json.loads(body)) == {"now", "fields"}
+
+    def test_get_without_a_token_is_forbidden(self, server) -> None:
+        assert server.request("GET", "/state")[0] == 403
+
+    def test_a_wrong_token_is_forbidden(self, server) -> None:
+        assert server.request("GET", f"/state?k={'x' * 43}")[0] == 403
+
+    def test_the_token_can_arrive_as_a_cookie(self, server) -> None:
+        status, _ = server.request(
+            "GET", "/state", headers={"Cookie": f"coldread_state={TOKEN}"}
+        )
+        assert status == 200
+
+    def test_a_query_token_sets_the_cookie(self, server) -> None:
+        conn = http.client.HTTPConnection("127.0.0.1", server.port, timeout=5)
+        conn.request("GET", f"/state?k={TOKEN}")
+        response = conn.getresponse()
+        response.read()
+        cookie = response.getheader("Set-Cookie") or ""
+        conn.close()
+        assert "HttpOnly" in cookie
+        assert "SameSite=Strict" in cookie
+
+    def test_post_merges_and_returns_the_new_state(self, server) -> None:
+        body = json.dumps({"fields": {"read": {"a.html": {"v": True}}}})
+        status, out = server.request(
+            "POST",
+            f"/state?k={TOKEN}",
+            body=body,
+            headers={"Content-Type": "application/json"},
+        )
+        assert status == 200
+        assert json.loads(out)["fields"]["read"]["a.html"]["v"] is True
+
+    def test_a_foreign_origin_is_rejected(self, server) -> None:
+        status, _ = server.request(
+            "POST",
+            f"/state?k={TOKEN}",
+            body="{}",
+            headers={"Origin": "https://evil.example"},
+        )
+        assert status == 403
+
+    def test_an_absent_origin_is_allowed(self, server) -> None:
+        # A bookmark tap sends no Origin. Rejecting absence breaks the only way
+        # this page is ever opened.
+        assert server.request("POST", f"/state?k={TOKEN}", body="{}")[0] == 200
+
+    def test_a_cross_site_fetch_metadata_header_is_rejected(self, server) -> None:
+        status, _ = server.request(
+            "POST",
+            f"/state?k={TOKEN}",
+            body="{}",
+            headers={"Sec-Fetch-Site": "cross-site"},
+        )
+        assert status == 403
+
+    def test_other_methods_are_405(self, server) -> None:
+        for method in ("PUT", "DELETE", "PATCH"):
+            assert server.request(method, f"/state?k={TOKEN}")[0] == 405
+
+    def test_an_unknown_path_is_404(self, server) -> None:
+        assert server.request("GET", f"/nope?k={TOKEN}")[0] == 404
+
+    def test_malformed_json_is_400_not_a_traceback(self, server) -> None:
+        status, _ = server.request("POST", f"/state?k={TOKEN}", body="{not json")
+        assert status == 400
+
+    def test_the_token_never_reaches_a_log_line(self, server, capsys) -> None:
+        server.request("GET", f"/state?k={TOKEN}")
+        captured = capsys.readouterr()
+        assert TOKEN not in captured.err
+        assert TOKEN not in captured.out

@@ -13,12 +13,16 @@ having to trust anyone's clock.
 
 from __future__ import annotations
 
+import hmac
 import json
 import os
 import pathlib
 import sys
+import threading
 import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Callable
+from urllib.parse import parse_qs, urlsplit
 
 #: A queued write older than this is treated as exactly this old. Bounds the
 #: damage a device with a badly wrong clock can do to the ordering.
@@ -171,3 +175,150 @@ class Store:
             backup = self.path.with_name(self.path.name + ".bak")
             os.replace(self.path, backup)
         os.replace(temp, self.path)
+
+
+#: Cap on a request body. Real payloads are a few hundred bytes; this stops a
+#: bad or hostile client from making the service read until it runs out of
+#: memory on a box that also does something more important.
+MAX_BODY = 256 * 1024
+
+COOKIE_NAME = "coldread_state"
+
+
+def _cookie_token(header: str | None) -> str:
+    for part in (header or "").split(";"):
+        name, _, value = part.strip().partition("=")
+        if name == COOKIE_NAME:
+            return value
+    return ""
+
+
+def make_handler(store: Store, token: str, lock: threading.Lock) -> type:
+    """A request handler bound to one store.
+
+    The lock is passed in rather than created here because it must cover
+    read-modify-write as a single unit, and ThreadingHTTPServer means two
+    devices really can POST at the same moment.
+    """
+
+    class Handler(BaseHTTPRequestHandler):
+        server_version = "coldread-state"
+
+        def log_message(self, fmt: str, *args: object) -> None:
+            # http.server logs the full request line by default, which would
+            # write the token into the journal on every single request.
+            scrubbed = [
+                str(a).split("?")[0] if isinstance(a, str) else a for a in args
+            ]
+            super().log_message(fmt, *scrubbed)
+
+        # --- guards ---------------------------------------------------------
+        def _authorised(self) -> bool:
+            query = parse_qs(urlsplit(self.path).query)
+            supplied = (query.get("k") or [""])[0]
+            from_query = bool(supplied)
+            if not supplied:
+                supplied = _cookie_token(self.headers.get("Cookie"))
+            # Compared as bytes: compare_digest raises TypeError on a non-ASCII
+            # str, and a hostile header must earn a 403, not a 500 traceback.
+            if not hmac.compare_digest(
+                supplied.encode("utf-8"), token.encode("utf-8")
+            ):
+                return False
+            self._set_cookie = from_query
+            return True
+
+        def _same_origin(self) -> bool:
+            """Reject a PRESENT and foreign origin. Absence is fine.
+
+            A Host check alone would not cover this: the browser derives Host
+            from the request target, so it stops DNS rebinding but not a blind
+            cross-origin POST.
+            """
+            site = self.headers.get("Sec-Fetch-Site")
+            if site and site not in ("same-origin", "none"):
+                return False
+            origin = self.headers.get("Origin")
+            if origin:
+                host = self.headers.get("Host", "")
+                return urlsplit(origin).netloc == host
+            return True
+
+        def _reject(self, code: int, text: str) -> None:
+            payload = text.encode("utf-8")
+            self.send_response(code)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def _send_json(self, payload: dict) -> None:
+            body = json.dumps(payload).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            if getattr(self, "_set_cookie", False):
+                self.send_header(
+                    "Set-Cookie",
+                    f"{COOKIE_NAME}={token}; HttpOnly; SameSite=Strict; Path=/",
+                )
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _prelude(self) -> bool:
+            if urlsplit(self.path).path != "/state":
+                self._reject(404, "not found")
+                return False
+            if not self._authorised():
+                self._reject(403, "forbidden")
+                return False
+            if not self._same_origin():
+                self._reject(403, "forbidden")
+                return False
+            return True
+
+        # --- routes ---------------------------------------------------------
+        def do_GET(self) -> None:
+            if not self._prelude():
+                return
+            with lock:
+                self._send_json(store.snapshot())
+
+        def do_POST(self) -> None:
+            if not self._prelude():
+                return
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                self._reject(400, "bad length")
+                return
+            if length > MAX_BODY:
+                self._reject(413, "too large")
+                return
+            raw = self.rfile.read(length) if length else b"{}"
+            try:
+                parsed = json.loads(raw.decode("utf-8") or "{}")
+            except (ValueError, UnicodeDecodeError):
+                self._reject(400, "bad json")
+                return
+            patch = parsed.get("fields") if isinstance(parsed, dict) else None
+            with lock:
+                self._send_json(store.apply(patch if isinstance(patch, dict) else {}))
+
+        def do_PUT(self) -> None:
+            self._reject(405, "method not allowed")
+
+        do_DELETE = do_PUT
+        do_PATCH = do_PUT
+        do_HEAD = do_PUT
+        do_OPTIONS = do_PUT
+
+    return Handler
+
+
+def serve(store: Store, token: str, host: str, port: int) -> None:
+    handler = make_handler(store, token, threading.Lock())
+    httpd = ThreadingHTTPServer((host, port), handler)
+    print(f"state: serving {store.path} on http://{host}:{port}/state")
+    httpd.serve_forever()
