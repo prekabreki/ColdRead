@@ -5,6 +5,7 @@ from __future__ import annotations
 import dataclasses
 import logging
 import os
+import subprocess
 import tempfile
 import threading
 import tkinter as tk
@@ -132,7 +133,10 @@ class VOFormatterApp(_AppBase):
         self.toggle_vars: dict[str, Any] = {}
         self.toggle_value_labels: dict[str, customtkinter.CTkLabel] = {}
         self._busy = False
+        self._closing = False
+        self._cancel_event = threading.Event()
         self._refresh_timer: str | None = None
+        self._status_timer: str | None = None
         self._has_preflight_data = False
         self._tooltips: list = []
         self._suppress_refresh = False
@@ -151,6 +155,7 @@ class VOFormatterApp(_AppBase):
         self._preview_tmp_path: str | None = None  # last preview PDF to clean up
         self._fixed_display_width: int | None = None  # None = auto fit-width
         self._raw_page_cache: dict[tuple, Image.Image] = {}  # (path, idx, dpi) -> PIL
+        self._page_cache_lock = threading.Lock()
         self._render_token: object | None = None  # invalidated on each new render
 
         # --- Layout: horizontal paned window ---
@@ -184,6 +189,80 @@ class VOFormatterApp(_AppBase):
 
         self._build_preview_panel()
         self._setup_drag_and_drop()
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
+
+    def _post(self, callback):
+        """Schedule a callback on the main thread, guarded against teardown.
+
+        No-ops when ``self._closing`` is set, and silently swallows
+        ``TclError`` / ``RuntimeError`` against a torn-down interpreter.
+        """
+        if self._closing:
+            return
+        try:
+            try:
+                self.after(0, callback)
+            except tk.TclError:
+                pass
+        except RuntimeError:
+            pass
+
+    def _on_close(self) -> None:
+        self._closing = True
+        if self._resize_timer is not None:
+            self.after_cancel(self._resize_timer)
+            self._resize_timer = None
+        if self._refresh_timer is not None:
+            self.after_cancel(self._refresh_timer)
+            self._refresh_timer = None
+        if self._status_timer is not None:
+            self.after_cancel(self._status_timer)
+            self._status_timer = None
+        if self._preview_tmp_path and os.path.isfile(self._preview_tmp_path):
+            try:
+                os.unlink(self._preview_tmp_path)
+            except OSError:
+                pass
+        self._cancel_event.set()
+        self._reap_claude()
+        self.destroy()
+
+    def _reap_claude(self) -> None:
+        import sys
+        if sys.platform == "win32":
+            try:
+                subprocess.run(
+                    ["taskkill", "/F", "/IM", "claude.exe"],
+                    capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW,
+                    timeout=5,
+                )
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        else:
+            try:
+                subprocess.run(
+                    ["pkill", "-f", "claude"],
+                    capture_output=True, timeout=5,
+                )
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+
+    def _on_cancel(self) -> None:
+        self._cancel_event.set()
+        self._reap_claude()
+        self._log("Cancelled.")
+
+    def _set_busy(self, busy: bool) -> None:
+        self._busy = busy
+        if busy:
+            self._cancel_event.clear()
+            self.cancel_btn.pack(side="left", padx=(12, 0), after=self.preview_btn)
+        else:
+            self.cancel_btn.pack_forget()
 
     # ------------------------------------------------------------------
     # Section builders — left pane
@@ -653,6 +732,13 @@ class VOFormatterApp(_AppBase):
         self.generate_btn.pack(side="left")
         self.generate_btn.configure(state="disabled")
 
+        self.cancel_btn = customtkinter.CTkButton(
+            frame, text="Cancel", width=80, command=self._on_cancel,
+            fg_color="#DC2626", hover_color="#B91C1C",
+        )
+        self.cancel_btn.pack(side="left", padx=(12, 0))
+        self.cancel_btn.pack_forget()
+
         row += 1
         return row
 
@@ -931,16 +1017,17 @@ class VOFormatterApp(_AppBase):
                         break
 
                     cache_key = (pdf_path, i, RENDER_DPI)
-                    raw_img = self._raw_page_cache.get(cache_key)
+                    with self._page_cache_lock:
+                        raw_img = self._raw_page_cache.get(cache_key)
                     if raw_img is None:
                         mat = fitz.Matrix(RENDER_DPI / 72, RENDER_DPI / 72)
                         pix = page.get_pixmap(matrix=mat)
                         raw_img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
                         if self._render_token is token:
-                            self._raw_page_cache[cache_key] = raw_img
-                            # Keep cache bounded (~80 pages ≈ 450 MB raw PIL)
-                            while len(self._raw_page_cache) > 80:
-                                del self._raw_page_cache[next(iter(self._raw_page_cache))]
+                            with self._page_cache_lock:
+                                self._raw_page_cache[cache_key] = raw_img
+                                while len(self._raw_page_cache) > 80:
+                                    del self._raw_page_cache[next(iter(self._raw_page_cache))]
 
                     if self._render_token is not token:
                         break
@@ -949,7 +1036,7 @@ class VOFormatterApp(_AppBase):
                     dh = int(raw_img.height * scale)
                     scaled = raw_img.resize((display_width, dh), Image.LANCZOS)
 
-                    self.after(0, lambda idx=i, im=scaled, dw=display_width, h=dh:
+                    self._post(lambda idx=i, im=scaled, dw=display_width, h=dh:
                                self._on_page_ready(token, idx, im, dw, h))
                 doc.close()
             except Exception as e:
@@ -981,7 +1068,9 @@ class VOFormatterApp(_AppBase):
         """Reload the preview with a new PDF."""
         self._load_pdf(pdf_path)
         self._preview_status.configure(text="Updated")
-        self.after(2000, lambda: self._preview_status.configure(text=""))
+        if self._status_timer is not None:
+            self.after_cancel(self._status_timer)
+        self._status_timer = self.after(2000, lambda: self._preview_status.configure(text=""))
 
     # ------------------------------------------------------------------
     # Logging
@@ -1401,7 +1490,7 @@ class VOFormatterApp(_AppBase):
         total = len(files)
         intro_blocks, outro_blocks = self._get_intro_outro_blocks()
 
-        self._busy = True
+        self._set_busy(True)
         self.generate_btn.configure(state="disabled")
         self._log(f"Batch: processing {total} files...")
 
@@ -1410,8 +1499,11 @@ class VOFormatterApp(_AppBase):
             results = []
 
             for idx, file_path in enumerate(files):
+                if self._cancel_event.is_set():
+                    self._post(lambda: self._log("  Batch cancelled."))
+                    break
                 filename = os.path.basename(file_path)
-                self.after(0, lambda i=idx, fn=filename: self._log(
+                self._post(lambda i=idx, fn=filename: self._log(
                     f"  [{i+1}/{total}] {fn}"
                 ))
 
@@ -1435,11 +1527,11 @@ class VOFormatterApp(_AppBase):
                         if cached:
                             preflight = cached
                             arch = preflight.archetype.value
-                            self.after(0, lambda a=arch: self._log(
+                            self._post(lambda a=arch: self._log(
                                 f"    Preflight: cached ({a})"
                             ))
                         else:
-                            self.after(0, lambda b=backend_choice: self._log(
+                            self._post(lambda b=backend_choice: self._log(
                                 f"    Preflight: analyzing ({b})..."
                             ))
                             try:
@@ -1449,18 +1541,18 @@ class VOFormatterApp(_AppBase):
                                 self._preflight_cache.put(text_hash, preflight)
                                 arch = preflight.archetype.value
                                 chars = len(preflight.characters)
-                                self.after(0, lambda a=arch, c=chars: self._log(
+                                self._post(lambda a=arch, c=chars: self._log(
                                     f"    Preflight: {a}, {c} character(s)"
                                 ))
                             except PreflightError as pe:
                                 pe_msg = str(pe)
-                                self.after(0, lambda m=pe_msg: self._log(f"    Preflight failed: {m}"))
+                                self._post(lambda m=pe_msg: self._log(f"    Preflight failed: {m}"))
                     elif skipping_preflight:
-                        self.after(0, lambda: self._log(
+                        self._post(lambda: self._log(
                             "    Preflight: skipped (toggle off)"
                         ))
                     elif not api_key:
-                        self.after(0, lambda: self._log(
+                        self._post(lambda: self._log(
                             "    Preflight: skipped (no API key — switch backend to 'Claude Code' to use subscription)"
                         ))
 
@@ -1485,7 +1577,7 @@ class VOFormatterApp(_AppBase):
                     base = os.path.splitext(filename)[0]
                     out_path = os.path.join(output_folder, f"{base}_formatted_folder.pdf")
                     generate_pdf(blocks, out_path, file_toggles)
-                    self.after(0, lambda p=out_path: self._log(
+                    self._post(lambda p=out_path: self._log(
                         f"    -> {os.path.basename(p)}"
                     ))
 
@@ -1503,12 +1595,12 @@ class VOFormatterApp(_AppBase):
 
                 results.append(entry)
 
-            self.after(0, lambda: self._on_batch_done(results))
+            self._post(lambda: self._on_batch_done(results))
 
         threading.Thread(target=_batch_worker, daemon=True).start()
 
     def _on_batch_done(self, results: list[dict]) -> None:
-        self._busy = False
+        self._set_busy(False)
         self.generate_btn.configure(state="normal")
 
         success = sum(1 for r in results if r["status"] == "success")
@@ -1562,7 +1654,7 @@ class VOFormatterApp(_AppBase):
             self._apply_defaults()
             return
 
-        self._busy = True
+        self._set_busy(True)
         self.analyze_btn.configure(state="disabled")
         if len(self.normalized_text) > 200_000:
             self._log("Script is very long — sampling for analysis...")
@@ -1590,10 +1682,10 @@ class VOFormatterApp(_AppBase):
                     filename_snapshot,
                     api_key=api_key,
                 )
-                self.after(0, lambda: self._on_preflight_done(result, source_text=text_snapshot))
+                self._post(lambda: self._on_preflight_done(result, source_text=text_snapshot))
             except PreflightError as e:
                 msg = str(e)
-                self.after(0, lambda: self._on_preflight_error(msg))
+                self._post(lambda: self._on_preflight_error(msg))
 
         threading.Thread(target=_worker, daemon=True).start()
 
@@ -1603,7 +1695,7 @@ class VOFormatterApp(_AppBase):
         from_cache: bool = False,
         source_text: str | None = None,
     ) -> None:
-        self._busy = False
+        self._set_busy(False)
         self.preflight_progress.stop()
         self.preflight_progress.pack_forget()
         self.analyze_btn.configure(state="normal", text="Re-analyze")
@@ -1635,7 +1727,7 @@ class VOFormatterApp(_AppBase):
         )
 
     def _on_preflight_error(self, error: str) -> None:
-        self._busy = False
+        self._set_busy(False)
         self.preflight_progress.stop()
         self.preflight_progress.pack_forget()
         self.analyze_btn.configure(state="normal")
@@ -1743,10 +1835,11 @@ class VOFormatterApp(_AppBase):
         backend_choice = self._get_backend()
         intro_blocks, outro_blocks = self._get_intro_outro_blocks()
 
-        self._busy = True
+        self._set_busy(True)
         self.preview_btn.configure(state="disabled")
 
         def _worker():
+            tmp_path: str | None = None
             try:
                 # Pronunciation guide (same logic as _run_generate)
                 pronunciation_guide = {}
@@ -1756,7 +1849,7 @@ class VOFormatterApp(_AppBase):
                     and preflight_snapshot.pronunciation_flags
                     and (backend_choice == "claude-code" or bool(api_key))
                 )
-                if can_pronounce:
+                if can_pronounce and not self._cancel_event.is_set():
                     words = [p.word for p in preflight_snapshot.pronunciation_flags]
                     arch_ctx = preflight_snapshot.archetype.value.replace("_", " ")
                     pronunciation_guide = run_pronunciation(
@@ -1764,6 +1857,10 @@ class VOFormatterApp(_AppBase):
                         script_context=f"{arch_ctx} script", api_key=api_key,
                     )
 
+                if self._cancel_event.is_set():
+                    self._post(lambda: self._set_busy(False))
+                    self._post(lambda: self.preview_btn.configure(state="normal"))
+                    return
                 blocks = format_script(
                     text_snapshot,
                     preflight_snapshot,
@@ -1776,17 +1873,23 @@ class VOFormatterApp(_AppBase):
                 tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
                 tmp_path = tmp.name
                 tmp.close()
+                self._preview_tmp_path = tmp_path
                 generate_pdf(blocks, tmp_path, toggles)
 
-                self.after(0, lambda: self._on_preview_done(tmp_path, filename, len(blocks)))
+                self._post(lambda: self._on_preview_done(tmp_path, filename, len(blocks)))
             except Exception as e:
                 msg = str(e)
-                self.after(0, lambda: self._on_preview_error(msg))
+                if tmp_path and os.path.isfile(tmp_path):
+                    try:
+                        os.unlink(tmp_path)
+                    except OSError:
+                        pass
+                self._post(lambda: self._on_preview_error(msg))
 
         threading.Thread(target=_worker, daemon=True).start()
 
     def _on_preview_done(self, pdf_path: str, filename: str, block_count: int) -> None:
-        self._busy = False
+        self._set_busy(False)
         self.preview_btn.configure(state="normal")
 
         # Clean up the previous preview temp file (created with delete=False).
@@ -1811,7 +1914,7 @@ class VOFormatterApp(_AppBase):
         )
 
     def _on_preview_error(self, error: str) -> None:
-        self._busy = False
+        self._set_busy(False)
         self.preview_btn.configure(state="normal")
         self._log(f"ERROR during preview: {error}")
 
@@ -1850,7 +1953,7 @@ class VOFormatterApp(_AppBase):
         backend_choice = self._get_backend()
         intro_blocks, outro_blocks = self._get_intro_outro_blocks()
 
-        self._busy = True
+        self._set_busy(True)
         self.generate_btn.configure(state="disabled")
         self._log("Generating PDF...")
 
@@ -1861,6 +1964,7 @@ class VOFormatterApp(_AppBase):
                     toggles.pronunciation_guide
                     and preflight_snapshot
                     and preflight_snapshot.pronunciation_flags
+                    and not self._cancel_event.is_set()
                 ):
                     if backend_choice == "claude-code" or api_key:
                         words = [p.word for p in preflight_snapshot.pronunciation_flags]
@@ -1870,7 +1974,7 @@ class VOFormatterApp(_AppBase):
                             script_context=f"{arch_ctx} script", api_key=api_key,
                         )
                     else:
-                        self.after(0, lambda: self._log("Pronunciation guide skipped (no API key)"))
+                        self._post(lambda: self._log("Pronunciation guide skipped (no API key)"))
 
                 blocks = format_script(
                     text_snapshot,
@@ -1896,18 +2000,18 @@ class VOFormatterApp(_AppBase):
                         batch_blocks, intro_blocks, outro_blocks
                     )
                     generate_pdf(batch_blocks, batch_path, batch_toggles)
-                    self.after(0, lambda p=batch_path: self._log(
+                    self._post(lambda p=batch_path: self._log(
                         f"Batch PDF saved: {os.path.basename(p)}"
                     ))
-                self.after(0, lambda: self._on_generate_done(result_path, len(blocks)))
+                self._post(lambda: self._on_generate_done(result_path, len(blocks)))
             except Exception as e:
                 msg = str(e)
-                self.after(0, lambda: self._on_generate_error(msg))
+                self._post(lambda: self._on_generate_error(msg))
 
         threading.Thread(target=_worker, daemon=True).start()
 
     def _on_generate_done(self, path: str, block_count: int) -> None:
-        self._busy = False
+        self._set_busy(False)
         self.generate_btn.configure(state="normal")
         self._log(f"Formatted {block_count} blocks")
         self._log(f"PDF saved: {path}")
@@ -1925,6 +2029,6 @@ class VOFormatterApp(_AppBase):
             log.warning("Could not read page count for %s: %s", path, e)
 
     def _on_generate_error(self, error: str) -> None:
-        self._busy = False
+        self._set_busy(False)
         self.generate_btn.configure(state="normal")
         self._log(f"ERROR: {error}")
