@@ -69,13 +69,22 @@ def _line_html(line: ReadLine) -> str:
     return f'<p class="{" ".join(classes)}"{attrs}>{escape(line.text)}</p>'
 
 
-def render(script: ReadScript, library: str | None = None) -> str:
+def render(
+    script: ReadScript,
+    library: str | None = None,
+    sync: str | None = None,
+) -> str:
     """Render `script` as one self-contained HTML document.
 
     `library` is the href of a library index to offer a way back to. It is
     opt-in because a read-view knows nothing about a library: the index is
     built by whatever publishes these pages, so defaulting the button on would
     ship a dead link to everyone converting a single PDF on their own machine.
+
+    `sync` is the href of a state service to share read marks and preferences
+    through, and is opt-in for the same reason and one more: a page must not
+    issue a request its deployment never asked for. Without it the page behaves
+    exactly as before, storing everything in this device's `localStorage`.
     """
     title = escape(script.title)
     display, variant = _split_variant(script.title)
@@ -93,6 +102,16 @@ def render(script: ReadScript, library: str | None = None) -> str:
         if library
         else ""
     )
+    # The indicator rides in #hud for the same reason the Library button does,
+    # and it is a <span> rather than a <button> because there is nothing to
+    # press: it reports, it does not act.
+    sync_attr = f' data-sync="{escape(sync)}"' if sync else ""
+    sync_badge = '<span id="sync"></span>\n' if sync else ""
+    # BEFORE reader.js, not after. reader.js calls coldreadSync() while it is
+    # setting up; inlined the other way round the symbol is undefined at that
+    # moment and the page falls back to device-local storage — silently, which
+    # is the one failure mode this feature is not allowed to have.
+    sync_js = f"<script>\n{_asset('sync.js')}\n</script>\n" if sync else ""
     return f"""<!doctype html>
 <html lang="en" data-theme="dark">
 <head>
@@ -107,7 +126,7 @@ maximum-scale=1, viewport-fit=cover">
 </style>
 </head>
 <body data-words-per-line="{script.words_per_line:.1f}" data-title="{title}"\
- data-words="{script.word_count}"{library_attr}>
+ data-words="{script.word_count}"{library_attr}{sync_attr}>
 <div id="script">
 <p class="hdr l b" style="font-size:1.4em">{display}</p>
 <p class="hdr l i">{len(script.lines)} lines &middot; {script.word_count} words \
@@ -120,7 +139,8 @@ A&minus;</button>
 <button id="bigger" type="button" aria-label="Larger text">A+</button>
 <button id="play" type="button" aria-label="Play or pause">&#9654;</button>
 <span id="status"></span>
-<button id="theme" type="button" aria-label="Toggle light or dark">&#9790;</button>
+{sync_badge}<button id="theme" type="button" aria-label="Toggle light or dark">&#9790;\
+</button>
 <div id="speed">
 <button id="wpmdown" type="button" aria-label="Slower">&minus;</button>
 <button id="wpmup" type="button" aria-label="Faster">+</button>
@@ -128,7 +148,7 @@ A&minus;</button>
 </div>
 <video id="awake" muted loop playsinline preload="auto"
  src="data:video/mp4;base64,{KEEP_AWAKE_MP4_BASE64}"></video>
-<script>
+{sync_js}<script>
 {_asset("reader.js")}
 </script>
 </body>

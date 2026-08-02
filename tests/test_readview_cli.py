@@ -141,3 +141,41 @@ class TestLibraryFlag:
         html = readview_path_for(pdf_path).read_text("utf-8")
         assert 'data-library="index.html"' in html
         assert 'id="back"' in html
+
+
+class TestSyncFlag:
+    """Opt-in, like --library: a lone read-view has no service to talk to, and
+    no page should issue a request nobody asked for."""
+
+    def test_no_sync_without_the_flag(self, sample_pdf) -> None:
+        pdf_path, _ = sample_pdf(Archetype.SINGLE_NARRATOR)
+        assert main([str(pdf_path)]) == 0
+        html = readview_path_for(pdf_path).read_text("utf-8")
+        assert "data-sync" not in html
+        # reader.js always names coldreadSync; only --sync inlines it.
+        assert "function coldreadSync(" not in html
+
+    def test_flag_threads_through_to_the_page(self, sample_pdf) -> None:
+        pdf_path, _ = sample_pdf(Archetype.SINGLE_NARRATOR)
+        assert main([str(pdf_path), "--sync", "/state"]) == 0
+        html = readview_path_for(pdf_path).read_text("utf-8")
+        assert 'data-sync="/state"' in html
+        assert "function coldreadSync(" in html
+        assert 'id="sync"' in html
+
+    def test_sync_and_library_coexist(self, sample_pdf) -> None:
+        # The real deployment passes both, and they land on the same <body>.
+        pdf_path, _ = sample_pdf(Archetype.SINGLE_NARRATOR)
+        assert main(
+            [str(pdf_path), "--library", "index.html", "--sync", "/state"]
+        ) == 0
+        html = readview_path_for(pdf_path).read_text("utf-8")
+        assert 'data-library="index.html"' in html
+        assert 'data-sync="/state"' in html
+
+    def test_several_pdfs_all_get_the_flag(self, sample_pdf) -> None:
+        first, _ = sample_pdf(Archetype.SINGLE_NARRATOR)
+        second, _ = sample_pdf(Archetype.MULTI_VOICE_DRAMA)
+        assert main([str(first), str(second), "--sync", "/state"]) == 0
+        for pdf in (first, second):
+            assert 'data-sync="/state"' in readview_path_for(pdf).read_text("utf-8")

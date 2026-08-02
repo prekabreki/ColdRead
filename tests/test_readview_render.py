@@ -41,10 +41,14 @@ def _line(text: str, **kwargs) -> ReadLine:
 
 
 class TestSelfContainment:
-    @pytest.fixture
-    def html(self, sample_pdf) -> str:
+    #: Parametrised over --sync because the flag inlines a second asset, and an
+    #: asset that reaches for the network is exactly the regression these tests
+    #: exist to catch. Sync talks to a RELATIVE href by design; the day it grows
+    #: an absolute default, this is what fails.
+    @pytest.fixture(params=[None, "/state"], ids=["plain", "synced"])
+    def html(self, request, sample_pdf) -> str:
         pdf_path, _ = sample_pdf(Archetype.MULTI_VOICE_DRAMA)
-        return render(extract_lines(pdf_path))
+        return render(extract_lines(pdf_path), sync=request.param)
 
     def test_no_external_script_or_stylesheet(self, html: str) -> None:
         assert "<script src" not in html
@@ -236,13 +240,14 @@ class TestReaderContract:
     static page with no controls and no scrolling, and no visible error.
     Deriving the list from reader.js itself keeps the two sides from drifting.
 
-    One id is exempt: `back` renders only under --library. What makes that safe
-    is the `if (el.back)` guard, so the exemption is earned by verifying the
-    guard exists rather than by trusting the list below.
+    Two ids are exempt: `back` renders only under --library and `sync` only
+    under --sync. What makes that safe is the `if (el.back)` / `if (el.sync)`
+    guards, so the exemption is earned by verifying the guard exists rather than
+    by trusting the list below.
     """
 
     #: ids reader.js looks up but guards before touching.
-    OPTIONAL = {"back"}
+    OPTIONAL = {"back", "sync"}
 
     @staticmethod
     def _js() -> str:
@@ -268,7 +273,9 @@ class TestReaderContract:
             )
 
     def test_optional_ids_do_render_once_enabled(self) -> None:
-        html = render(_script([_line("alpha")]), library="index.html")
+        html = render(
+            _script([_line("alpha")]), library="index.html", sync="/state"
+        )
         missing = sorted(i for i in self.OPTIONAL if f'id="{i}"' not in html)
         assert not missing, f"enabled but never rendered: {missing}"
 
@@ -364,6 +371,22 @@ class TestReaderContract:
         assert 'data-theme="light"' in css
         assert 'data-theme="dark"' in html
 
+        # --sync adds three couplings of exactly the same kind. reader.js reads
+        # the service href off a body data attribute, and paints the indicator
+        # by setting a class name that only reader.css gives meaning to — so a
+        # rename on either side leaves a badge that is present, silent and
+        # colourless, with nothing logged anywhere.
+        sync_js = (pkg / "sync.js").read_text(encoding="utf-8")
+        synced = render(_script([_line("alpha")]), sync="/state")
+        assert "dataset.sync" in js and 'data-sync="/state"' in synced
+        assert "#sync {" in css and 'id="sync"' in synced
+        for state in ("pending", "blocked"):
+            assert f"#sync.{state}" in css, f"no CSS for the {state} state"
+            assert f'"{state}"' in sync_js, (
+                f"sync.js no longer reports {state!r}; reader.js sets it as a "
+                f"class name straight from state()"
+            )
+
 
 class TestLibraryButton:
     """Opt-in only: a lone read-view has no library to return to.
@@ -393,6 +416,154 @@ class TestLibraryButton:
         html = render(_script([_line("x")]), library='i.html" onload="evil()')
         assert 'onload="evil()' not in html
         assert "&quot;" in html
+
+
+class TestSyncWiring:
+    """Shared read state, opt-in via --sync.
+
+    Same reasoning as --library and one more: a page must not issue a request
+    its deployment never asked for. Off, the page is byte-for-byte the
+    device-local read-view it always was.
+    """
+
+    @staticmethod
+    def _js() -> str:
+        from importlib.resources import files
+
+        return (files("vo_format.readview") / "reader.js").read_text(encoding="utf-8")
+
+    def test_sync_is_off_by_default(self) -> None:
+        html = render(_script([_line("A line.")]))
+        # The DEFINITION, not the name: reader.js always mentions coldreadSync,
+        # because the decision to use it is made at run time from data-sync.
+        assert "function coldreadSync(" not in html
+        assert "data-sync" not in html
+        assert 'id="sync"' not in html
+
+    def test_sync_is_inlined_when_asked_for(self) -> None:
+        html = render(_script([_line("A line.")]), sync="/state")
+        assert "function coldreadSync(" in html
+        assert 'data-sync="/state"' in html
+
+    def test_the_sync_client_is_inlined_before_the_reader(self) -> None:
+        """Order, not just presence.
+
+        reader.js resolves coldreadSync while it is setting up. Inlined the other
+        way round the symbol is undefined at that moment and the `typeof` guard
+        quietly falls back to device-local storage — a page that looks perfect,
+        works perfectly, and syncs nothing.
+        """
+        html = render(_script([_line("A line.")]), sync="/state")
+        assert html.index("function coldreadSync(") < html.index(
+            "function pxPerSecond("
+        ), "sync.js is inlined after reader.js; coldreadSync will be undefined"
+
+    def test_the_sync_client_is_still_self_contained(self) -> None:
+        html = render(_script([_line("A line.")]), sync="/state")
+        assert "<script src" not in html
+        assert "<link" not in html
+
+    def test_the_indicator_has_a_home(self) -> None:
+        html = render(_script([_line("A line.")]), sync="/state")
+        assert 'id="sync"' in html
+
+    def test_the_indicator_sits_inside_the_hud(self) -> None:
+        # Not decoration: #hud is what the touch handler exempts from the
+        # freeze-and-drag gesture. Anywhere else in the page and the badge is a
+        # patch of script that scrubs when brushed.
+        html = render(_script([_line("A line.")]), sync="/state")
+        hud = html[html.index('<div id="hud">') : html.index('<video id="awake"')]
+        assert 'id="sync"' in hud
+
+    def test_the_indicator_follows_the_status_readout(self) -> None:
+        html = render(_script([_line("A line.")]), sync="/state")
+        assert html.index('id="status"') < html.index('id="sync"')
+
+    def test_the_sync_href_is_escaped(self) -> None:
+        """It reaches an HTML attribute, so a quote must not break out."""
+        html = render(_script([_line("x")]), sync='/state" onload="evil()')
+        assert 'onload="evil()' not in html
+        assert "&quot;" in html
+
+    def test_the_store_delegates_rather_than_being_replaced(self) -> None:
+        """`store` is the seam, and its get/set signatures must not move.
+
+        Every call site in reader.js — wpm, size, theme, pos, mark — goes through
+        it, so a changed signature would be a five-way silent breakage.
+        """
+        js = self._js()
+        assert 'coldreadSync("coldread", syncHref)' in js
+        assert "shared.get(namespace, key, fallback)" in js
+        assert "shared.set(namespace, key, value)" in js
+
+    def test_the_namespace_is_the_one_the_state_service_expects(self) -> None:
+        # The design's data model names it `script:<full stem>`, and the full
+        # stem is what keeps a formatted and a batched cut apart.
+        js = self._js()
+        assert 'var namespace = "script:" + (body.dataset.title || "untitled");' in js
+
+    @pytest.mark.parametrize("event", ["touchstart", "mousedown"])
+    def test_the_input_handlers_claim_the_page_before_anything_else(
+        self, event: str
+    ) -> None:
+        """`touchedYet` must be set ahead of each handler's #hud early return.
+
+        Pressing A+ is every bit as much "I am reading this" as dragging the
+        script is, and both handlers bail out on #hud targets before doing
+        anything else — so the flag has to be the first statement or a whole
+        session spent on the controls stays eligible for a remote seek.
+        """
+        js = self._js()
+        match = re.search(
+            rf'addEventListener\("{event}", function \(e\) \{{\n\s*(.+)\n', js
+        )
+        assert match, f"could not find the document-level {event} handler"
+        assert match.group(1).strip() == "touchedYet = true;", (
+            f"the {event} handler starts with {match.group(1).strip()!r}; it must "
+            "set touchedYet first, before the #hud early return"
+        )
+
+    def test_a_remote_position_is_applied_only_before_the_first_touch(self) -> None:
+        """The one rule this feature is not allowed to get wrong.
+
+        The state fetch is asynchronous, so a position the server won can land
+        seconds into a read. Applying it then yanks the script out from under
+        someone mid-sentence, which is worse than not syncing it at all. After
+        first interaction the value is still stored — it takes effect next load.
+        """
+        js = self._js()
+        calls = [
+            line.strip()
+            for line in js.splitlines()
+            if re.search(r"(?<!function )\brestore\(\)", line)
+        ]
+        assert calls, "nothing calls restore() — the page never resumes anywhere"
+        assert "if (!touchedYet) { restore(); }" in calls, (
+            "no touchedYet-guarded restore(): either sync never re-applies what "
+            "the server sent, or it does so unconditionally"
+        )
+        # Exactly one unguarded call, and it is the synchronous load-time one.
+        # Every other route into restore() runs asynchronously, by which time the
+        # reader may already be reading.
+        unguarded = [c for c in calls if "touchedYet" not in c]
+        assert unguarded == ["restore();"], (
+            f"unexpected unguarded restore() call(s): {unguarded}"
+        )
+
+    def test_the_guarded_restore_is_the_sync_callback(self) -> None:
+        # The guard is only worth anything if it sits on the path a server
+        # update actually takes into the page.
+        js = self._js()
+        block = js[js.index("shared.onchange(") :]
+        block = block[: block.index("\n  }")]
+        assert "if (!touchedYet) { restore(); }" in block
+
+    def test_the_indicator_is_painted_from_the_clients_own_state_names(self) -> None:
+        js = self._js()
+        block = js[js.index("shared.onchange(") :]
+        block = block[: block.index("\n  }")]
+        assert 'state === "clean"' in block
+        assert "el.sync.className = state;" in block
 
 
 class TestCountdown:

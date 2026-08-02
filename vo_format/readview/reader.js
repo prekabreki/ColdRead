@@ -25,6 +25,7 @@
     theme: document.getElementById("theme"),
     status: document.getElementById("status"),
     back: document.getElementById("back"),      // absent unless --library
+    sync: document.getElementById("sync"),      // absent unless --sync
     awake: document.getElementById("awake"),
     firstLine: document.querySelector(".bl")
   };
@@ -33,16 +34,33 @@
   // index into this list, so it only has to be self-consistent within a page.
   var lines = [].slice.call(document.querySelectorAll(".l"));
 
+  // Shared state, only when --sync asked for it. The `typeof` check is not
+  // paranoia: sync.js is inlined ahead of this file, and a deployment that
+  // updated one asset and not the other must degrade to device-local storage
+  // rather than throw and leave a page with no controls at all.
+  var syncHref = body.dataset.sync || "";
+  var shared = syncHref && typeof coldreadSync === "function"
+    ? coldreadSync("coldread", syncHref)
+    : null;
+  // One namespace per script, keyed on the full stem, so a formatted and a
+  // batched cut of one title keep separate marks — the same distinction
+  // storeKey already makes locally.
+  var namespace = "script:" + (body.dataset.title || "untitled");
+
   // Safari blocks storage for file:// origins, and Phase 1 is delivered as a
   // file. Losing preferences is acceptable; refusing to render is not.
+  // The get/set signatures are unchanged whether or not sync is on, so no call
+  // site below has to know synchronisation exists.
   var store = {
     get: function (key, fallback) {
+      if (shared) { return shared.get(namespace, key, fallback); }
       try {
         var raw = localStorage.getItem(storeKey + ":" + key);
         return raw === null ? fallback : JSON.parse(raw);
       } catch (e) { return fallback; }
     },
     set: function (key, value) {
+      if (shared) { shared.set(namespace, key, value); return; }
       try { localStorage.setItem(storeKey + ":" + key, JSON.stringify(value)); }
       catch (e) { /* in-memory only */ }
     }
@@ -60,6 +78,13 @@
   var samples = [], gliding = false, glideV = 0, glideLast = 0;
   var holdTimer = null, holdX = 0, holdY = 0, touchSeen = false;
   var markEl = null;
+  // Has the reader put a finger or a cursor on this page yet? The only thing
+  // this gates is whether a position arriving from the server may move the
+  // page. Set from the very TOP of the input handlers, before their #hud early
+  // returns, because pressing A+ is every bit as much "I am reading this" as
+  // dragging the script is.
+  var touchedYet = false;
+  var restoring = false;
 
   function clamp(value, low, high) {
     return Math.min(high, Math.max(low, value));
@@ -388,6 +413,7 @@
 
   // --- touch: down freezes, drag repositions, lift glides -------------------
   document.addEventListener("touchstart", function (e) {
+    touchedYet = true;
     if (e.target.closest("#hud")) { return; }
     touchSeen = true;
     stopGlide();                      // a finger down always means "stop here"
@@ -431,6 +457,7 @@
   // stands down the moment a real touch arrives, because iOS follows a tap with
   // synthetic mouse events and a second hold would toggle the mark back off.
   document.addEventListener("mousedown", function (e) {
+    touchedYet = true;
     if (touchSeen || e.target.closest("#hud")) { return; }
     startHold(e.clientX, e.clientY);
   });
@@ -447,6 +474,10 @@
 
   // --- keyboard: also the foot-pedal path, and the Pi may have no touch -----
   window.addEventListener("keydown", function (e) {
+    // The pedal and the Pi's keyboard are reading too. Nothing in the plan
+    // demanded this, but a foot-pedal session with no touch and no mouse would
+    // otherwise stay eligible for a remote seek for its whole duration.
+    touchedYet = true;
     switch (e.key) {
       case " ": case "Enter": e.preventDefault(); toggle(); break;
       case "ArrowUp": e.preventDefault(); nudgeWpm(WPM_STEP); break;
@@ -515,19 +546,53 @@
 
   window.addEventListener("pagehide", function () { store.set("pos", pos); });
 
-  applySize();
-  applyTheme();
-
+  // Take the page to where the reader left off, reading both values back out of
+  // the store rather than trusting the copies taken at load: with sync on, the
+  // store is what the server just wrote into.
+  //
   // The mark beats the saved position: it is a deliberate declaration of where
   // to resume, where `pos` is only wherever the page happened to be left. The
   // cost is that reading past the mark and coming back rewinds to it.
-  if (mark && paintMark(mark)) {
-    // ~40% down the viewport rather than at the very top — the lines above the
-    // mark are the run-up you need to hear before speaking.
-    var markTop = markEl.getBoundingClientRect().top + window.scrollY;
-    seek(markTop - window.innerHeight * 0.4);
-  } else {
-    if (mark) { commitMark(null); }   // stale: drop it from storage too
-    seek(pos);
+  //
+  // `restoring` guards re-entry: dropping a stale mark writes to the store,
+  // which with sync on announces a change, which lands back here.
+  function restore() {
+    if (restoring) { return; }
+    restoring = true;
+    mark = store.get("mark", null);
+    pos = store.get("pos", 0);
+    clearMark();
+    if (mark && paintMark(mark)) {
+      // ~40% down the viewport rather than at the very top — the lines above
+      // the mark are the run-up you need to hear before speaking.
+      var markTop = markEl.getBoundingClientRect().top + window.scrollY;
+      seek(markTop - window.innerHeight * 0.4);
+    } else {
+      if (mark) { commitMark(null); }   // stale: drop it from storage too
+      seek(pos);
+    }
+    restoring = false;
   }
+
+  if (shared) {
+    shared.onchange(function (state) {
+      if (el.sync) {
+        // Silence means clean. A control that never visibly does anything
+        // reads as dead, so pending and blocked both show.
+        el.sync.textContent = state === "clean" ? "" : "⇅";
+        el.sync.className = state;
+      }
+      // THE rule. A scroll position or a resume mark arriving from the server
+      // is applied only while the reader has not touched the page — the state
+      // fetch is asynchronous, so it can land seconds into a read. Having the
+      // script yank itself out from under someone mid-sentence is worse than
+      // not syncing at all. After first interaction the value is still stored;
+      // it simply takes effect on the next load.
+      if (!touchedYet) { restore(); }
+    });
+  }
+
+  applySize();
+  applyTheme();
+  restore();
 })();

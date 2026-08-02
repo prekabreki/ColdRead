@@ -52,10 +52,24 @@ def _build_parser() -> argparse.ArgumentParser:
             "default: a lone read-view has no library to return to"
         ),
     )
+    parser.add_argument(
+        "--sync",
+        metavar="HREF",
+        help=(
+            "share read state with other devices via the state service at HREF "
+            "(e.g. /state). Off by default: a lone read-view has no service to "
+            "talk to, and no page should issue a request nobody asked for"
+        ),
+    )
     return parser
 
 
-def _convert(pdf: Path, force: bool, library: str | None = None) -> None:
+def _convert(
+    pdf: Path,
+    force: bool,
+    library: str | None = None,
+    sync: str | None = None,
+) -> None:
     """Convert one PDF. Raises ReadViewError on any failure."""
     if not pdf.is_file():
         raise ReadViewError(f"{pdf}: not a file")
@@ -70,7 +84,9 @@ def _convert(pdf: Path, force: bool, library: str | None = None) -> None:
 
     script = extract_lines(pdf)
     try:
-        out.write_text(render(script, library=library), encoding="utf-8")
+        out.write_text(
+            render(script, library=library, sync=sync), encoding="utf-8"
+        )
     except OSError as exc:
         raise ReadViewError(f"{out.name}: could not write ({exc})") from exc
     # The canary: line count tracks the script, so a three-digit drop is
@@ -91,7 +107,9 @@ def main(argv: list[str] | None = None) -> int:
     failures = 0
     for pdf in args.pdfs:
         try:
-            _convert(pdf, force=args.force, library=args.library)
+            _convert(
+                pdf, force=args.force, library=args.library, sync=args.sync
+            )
         except ReadViewError as exc:
             failures += 1
             print(f"error: {exc}", file=sys.stderr)

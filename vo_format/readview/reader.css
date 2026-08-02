@@ -128,6 +128,15 @@ mark.resume {
    grouping the wpm pair took two 44px buttons and their gaps out of this row. */
 #status { min-width: 22ch; text-align: center; font-variant-numeric: tabular-nums; }
 
+/* Sync, rendered only under --sync. Silence means clean; amber means the queue
+   has something in it; red means the server REFUSED us, which is emphatically
+   not the same as being offline and must not look like it. The width is
+   reserved either way so the HUD row does not shift as the state changes.
+   The class names come from sync.js's state(): clean / pending / blocked. */
+#sync { min-width: 1.5ch; text-align: center; opacity: 0.9; }
+#sync.pending { color: #ffb84d; }
+#sync.blocked { color: #ff6b6b; }
+
 /* Progress: the peripheral cue, for when you are looking at the script and not
    at the HUD. A pseudo-element driven by --progress rather than a real <div>:
    nothing extra in the DOM to be missing, and no element for reader.js to have
