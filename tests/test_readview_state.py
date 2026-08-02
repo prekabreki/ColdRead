@@ -6,6 +6,7 @@ import ast
 import http.client
 import json
 import pathlib
+import secrets
 import sys
 import threading
 
@@ -224,11 +225,14 @@ class _Server:
     def __init__(self, tmp_path: pathlib.Path) -> None:
         store = Store(tmp_path / "state.json")
         store.load()
-        handler = make_handler(store, TOKEN, threading.Lock())
+        self._nonce = secrets.token_hex(8)
+        handler = make_handler(store, TOKEN, threading.Lock(), nonce=self._nonce)
         # The same server class `serve()` uses, not a bare ThreadingHTTPServer:
         # that one carries SO_REUSEADDR, which on Windows lets a bind land on a
         # port something else is already listening on. A fixture that can be
         # answered by the wrong listener fails in a way nobody can read.
+        # Every response carries the X-ColdRead-Nonce header so a recurrence
+        # names the wrong-listener cause instead of looking like a logic bug.
         self.httpd = _StateServer(("127.0.0.1", 0), handler)
         self.port = self.httpd.server_address[1]
         # A short poll interval only so `shutdown()` is noticed promptly:
@@ -251,9 +255,22 @@ class _Server:
         try:
             conn.request(method, path, body=body, headers=headers or {})
             response = conn.getresponse()
-            return response.status, response.read().decode("utf-8")
+            body = response.read().decode("utf-8")
+            self._check_nonce(response)
+            return response.status, body
         finally:
             conn.close()
+
+    def _check_nonce(self, response) -> None:
+        server_nonce = response.getheader("X-ColdRead-Nonce")
+        assert server_nonce == self._nonce, (
+            f"Wrong server answered on port {self.port}: "
+            f"expected nonce {self._nonce!r}, got {server_nonce!r}"
+        )
+
+    def assert_nonce(self, response) -> None:
+        """Public entrypoint for tests that use a raw connection."""
+        self._check_nonce(response)
 
     def close(self) -> None:
         self.httpd.shutdown()
@@ -268,6 +285,23 @@ def server(tmp_path: pathlib.Path):
 
 
 class TestHttp:
+    """HTTP integration tests. Each server instance echoes a per-test nonce in the
+    X-ColdRead-Nonce header so that if a wrong listener answers on the ephemeral
+    port the failure message names the cause ("expected nonce …, got …") instead
+    of presenting as a logic bug in the assertion.
+
+    Context (issue #149): test_a_cross_site_fetch_metadata_header_is_rejected
+    failed exactly once in ~480 runs; the server log showed the correct 403,
+    suggesting a wrong listener answered. The likeliest mechanism is the Windows
+    SO_REUSEADDR quirk (a port is bound by an orphaned process from a prior
+    run). The fixture now uses _StateServer (allow_reuse_address=False on
+    Windows) to turn that into a loud bind error, and this nonce guard so any
+    future recurrence is self-describing.
+
+    The failure mechanism could not be reproduced deterministically within a
+    single process. Attempt count: ~480 (see issue #149).
+    """
+
     def test_get_with_the_token_returns_a_snapshot(self, server) -> None:
         status, body = server.request("GET", f"/state?k={TOKEN}")
         assert status == 200
@@ -292,6 +326,7 @@ class TestHttp:
         response.read()
         cookie = response.getheader("Set-Cookie") or ""
         conn.close()
+        server.assert_nonce(response)
         assert "HttpOnly" in cookie
         assert "SameSite=Strict" in cookie
 

@@ -195,16 +195,23 @@ def _cookie_token(header: str | None) -> str:
     return ""
 
 
-def make_handler(store: Store, token: str, lock: threading.Lock) -> type:
+def make_handler(
+    store: Store, token: str, lock: threading.Lock, nonce: str = ""
+) -> type:
     """A request handler bound to one store.
 
     The lock is passed in rather than created here because it must cover
     read-modify-write as a single unit, and ThreadingHTTPServer means two
     devices really can POST at the same moment.
+
+    If `nonce` is non-empty the handler echoes it in an X-ColdRead-Nonce
+    response header on every response, so tests can distinguish "the wrong
+    listener answered on our port" from "the assertion is wrong".
     """
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "coldread-state"
+        _nonce = nonce
 
         def log_message(self, fmt: str, *args: object) -> None:
             # http.server logs the full request line by default, which would
@@ -251,6 +258,8 @@ def make_handler(store: Store, token: str, lock: threading.Lock) -> type:
             self.send_response(code)
             self.send_header("Content-Type", "text/plain; charset=utf-8")
             self.send_header("Content-Length", str(len(payload)))
+            if self._nonce:
+                self.send_header("X-ColdRead-Nonce", self._nonce)
             self.end_headers()
             self.wfile.write(payload)
 
@@ -265,6 +274,8 @@ def make_handler(store: Store, token: str, lock: threading.Lock) -> type:
                     "Set-Cookie",
                     f"{COOKIE_NAME}={token}; HttpOnly; SameSite=Strict; Path=/",
                 )
+            if self._nonce:
+                self.send_header("X-ColdRead-Nonce", self._nonce)
             self.end_headers()
             self.wfile.write(body)
 
