@@ -12,7 +12,7 @@ shipping one variant per episode instead of both.
 ## Where the generator lives
 
 The index generator moves out of the `ssh` heredoc in
-`~/claude/scripts/coldread-push.sh` into `vo_format/readview/library.py`, and the
+the publisher's `coldread-push.sh` into `vo_format/readview/library.py`, and the
 push script pipes that file instead of embedding it:
 
 ```bash

@@ -44,7 +44,7 @@ Consequences that make this the right base:
 The work splits across two machines along a natural seam:
 
 ```
-                    RIG (LinuxHeima)                     │      PI (raspberrypi.local)
+                    RIG (the workstation)                │      PI (the always-on box)
                                                          │
  ~/OneDrive/CL/ready/*.pdf  ──┐                          │
  ~/OneDrive/BoP/ready/*.pdf ──┴─► extract ──► render ──► │  serve ──► iPad / Pi screen
@@ -262,7 +262,7 @@ booth, not in testing.
 > is no longer needed.
 >
 > As deployed: the library lives on the always-on Pi at
-> `https://raspberrypi.tail6fdc98.ts.net`, served by a `coldread-library` systemd
+> `https://<pi-host>.<tailnet>.ts.net`, served by a `coldread-library` systemd
 > unit bound to `127.0.0.1` only (so it is not reachable on the LAN at all —
 > Tailscale proxies it locally), capped with `MemoryMax=64M` so it can never
 > squeeze `pihole-FTL` on a 416MB box that serves the house's DNS.
@@ -342,7 +342,7 @@ Three subtleties, on the record so they are not rediscovered:
   the host.
 - **Strict `Host` equality does not fit.** The usual loopback recipe pins `Host`
   to one exact value, but this server has three legitimate names:
-  `raspberrypi.local`, `<pi-lan-ip>`, and the tailnet address. `Host` is
+  `<pi-host>.local`, `<pi-lan-ip>`, and the tailnet address. `Host` is
   therefore checked against a configured allowlist seeded from the addresses
   detected at startup, and `Origin` / `Sec-Fetch-Site` are rejected when present
   and not same-origin. Absence is allowed — a bookmark tap sends neither.
@@ -364,7 +364,7 @@ invocation per channel, each with its own destination:
 ```bash
 for ch in CL BoP; do
   rsync -av --delete --include='*.html' --exclude='*' \
-    "$HOME/OneDrive/$ch/ready/" "raspberrypi.local:~/coldread-library/$ch/"
+    "$HOME/OneDrive/$ch/ready/" "<pi-host>:~/coldread-library/$ch/"
 done
 ```
 
