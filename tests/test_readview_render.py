@@ -393,3 +393,31 @@ class TestLibraryButton:
         html = render(_script([_line("x")]), library='i.html" onload="evil()')
         assert 'onload="evil()' not in html
         assert "&quot;" in html
+
+
+class TestCountdown:
+    """The HUD says how long is left, derived from the scroll engine."""
+
+    def _html(self) -> str:
+        return render(_script([_line("A line of body text.")]))
+
+    def test_the_countdown_helpers_are_inlined(self) -> None:
+        html = self._html()
+        assert "function clockText(" in html
+        assert "function secondsLeft(" in html
+
+    def test_it_is_derived_from_the_scroll_speed_not_the_word_count(self) -> None:
+        # The whole point: one source of truth with the autoscroll. A
+        # word-count estimate is a parallel calculation that can drift from
+        # the thing actually moving the page.
+        html = self._html()
+        assert "(maxScroll() - pos) / pxPerSecond()" in html
+
+    def test_the_readout_includes_the_clock(self) -> None:
+        assert 'clockText(secondsLeft())' in self._html()
+
+    def test_the_status_field_is_wide_enough_for_it(self) -> None:
+        # 15ch fitted "42% · 150 wpm"; the clock needs more or the HUD jitters
+        # as the digits change.
+        html = self._html()
+        assert re.search(r"#status\s*\{[^}]*min-width:\s*22ch", html)

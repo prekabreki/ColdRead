@@ -101,9 +101,35 @@
     return clamp(Math.round((pos / max) * 100), 0, 100);
   }
 
+  // Remaining time, derived from the scroll engine rather than from the word
+  // count on <body>. This IS the time until autoscroll reaches the end, by
+  // construction, so it cannot drift from what the page does; it needs no
+  // attribute an older read-view might lack; and it follows any future change
+  // to pxPerSecond() with no second edit. pxPerSecond() is always positive
+  // (WPM_MIN is 40 and lineHeightPx() has a non-zero fallback), so there is no
+  // divide-by-zero to guard. A script shorter than the viewport has
+  // maxScroll() <= 0 and pos clamped to 0, which reads 0:00 — the same "all on
+  // screen means done" answer percent() gives.
+  function secondsLeft() {
+    var left = (maxScroll() - pos) / pxPerSecond();
+    return left > 0 ? left : 0;
+  }
+
+  function clockText(seconds) {
+    if (!isFinite(seconds) || seconds < 0) { seconds = 0; }
+    var total = Math.round(seconds);
+    var s = total % 60;
+    var m = Math.floor(total / 60) % 60;
+    var h = Math.floor(total / 3600);
+    var ss = (s < 10 ? "0" : "") + s;
+    if (h > 0) { return h + ":" + (m < 10 ? "0" : "") + m + ":" + ss; }
+    return m + ":" + ss;
+  }
+
   function paintHud() {
     var done = percent();
-    el.status.textContent = done + "% · " + wpm + " wpm" + (running ? "" : " ▌▌");
+    el.status.textContent = done + "% · " + wpm + " wpm · " +
+      clockText(secondsLeft()) + (running ? "" : " ▌▌");
     el.play.textContent = running ? "▌▌" : "▶";
     // Drives #hud::after, and set on the HUD rather than on the root: this runs
     // every frame of a scroll, and a custom property on documentElement

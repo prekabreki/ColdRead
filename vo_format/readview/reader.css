@@ -123,7 +123,10 @@ mark.resume {
   -webkit-tap-highlight-color: transparent;
 }
 
-#status { min-width: 15ch; text-align: center; font-variant-numeric: tabular-nums; }
+/* min-width is a floor, not a clamp: at the extremes ("13% · 40 wpm · 1:15:00
+   ▌▌") the readout simply takes the room it needs. The HUD can afford it —
+   grouping the wpm pair took two 44px buttons and their gaps out of this row. */
+#status { min-width: 22ch; text-align: center; font-variant-numeric: tabular-nums; }
 
 /* Progress: the peripheral cue, for when you are looking at the script and not
    at the HUD. A pseudo-element driven by --progress rather than a real <div>:
