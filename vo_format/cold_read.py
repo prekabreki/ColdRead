@@ -6,6 +6,7 @@ line is a "breath group" the voice actor can grab in one glance.
 
 from __future__ import annotations
 
+import math
 import re
 
 from .models import (
@@ -175,8 +176,6 @@ def wrap_cold_read(text: str, max_chars: int) -> str:
     str
         Text with ``\\n`` inserted at computed break points.
     """
-    import math
-
     # Already fits on one line
     if len(text) <= max_chars:
         return text

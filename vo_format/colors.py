@@ -55,6 +55,7 @@ def assign_colors(
         color_map[n.name] = NARRATOR_COLOR
 
     used_hexes: set[str] = {NARRATOR_COLOR}
+    used_hexes_upper: set[str] = {NARRATOR_COLOR.upper()}
 
     # Sort speakers by line count descending so the most prominent voice
     # gets the most visually distinct color (Blue).
@@ -68,12 +69,13 @@ def assign_colors(
         if (
             char.suggested_color
             and char.suggested_color.upper() in palette_hexes
-            and char.suggested_color.upper() not in {h.upper() for h in used_hexes}
+            and char.suggested_color.upper() not in used_hexes_upper
         ):
             color = char.suggested_color
         else:
             color = palette_color
         used_hexes.add(color.upper())
+        used_hexes_upper.add(color.upper())
         color_map[char.name] = color
 
     return color_map
