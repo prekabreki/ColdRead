@@ -53,6 +53,11 @@ _CONFIG_NAME = "channels.json"
 #: second place to record it would give the two ends something to drift on.
 _WORDS_RE = re.compile(r'data-words="(\d+)"')
 
+# Duplicated from render.py's _VARIANT_RE because library.py is stdlib-only and
+# is piped to a remote interpreter, so it cannot import from the package. The
+# default "formatted" variant is bookkeeping noise; "batched" carries information.
+_FORMATTED_RE = re.compile(r"\s+-\s+formatted$", re.IGNORECASE)
+
 #: How much of a read-view to read looking for the count. The attribute sits on
 #: <body>, currently ~4.3KB in, behind the inlined CSS; everything that scales
 #: with the script — the lines themselves — comes after it, which is what makes
@@ -164,9 +169,10 @@ def _row(entry: IndexEntry, position: int) -> str:
     # time available, which is the question the library page gets asked.
     facts = [] if entry.words is None else [f"{entry.words:,} words"]
     facts.append(html.escape(entry.date))
+    display = _FORMATTED_RE.sub("", entry.title)
     return (
         f'<li data-key="{key}" data-i="{position}"><div class="row">'
-        f'<a href="{key}"><b>{html.escape(entry.title)}</b>'
+        f'<a href="{key}"><b>{html.escape(display)}</b>'
         f'<span>{" &middot; ".join(facts)}</span></a>'
         '<button class="check" type="button" aria-label="Mark read or unread"'
         ">&#10003;</button></div></li>"
