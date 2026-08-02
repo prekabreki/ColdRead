@@ -22,6 +22,13 @@ from .models import (
 )
 
 
+METADATA_STRIP_MAX_RATIO = 0.5
+
+
+class MetadataStripRefused(ValueError):
+    """Raised when metadata stripping would remove too much content."""
+
+
 # ---------------------------------------------------------------------------
 # Markdown helpers
 # ---------------------------------------------------------------------------
@@ -139,8 +146,25 @@ def _strip_metadata_blocks(
 
     Returns list of (original_line_number, text) tuples for surviving lines.
     Line numbers are 1-based matching the original file.
+
+    Raises MetadataStripRefused if the strip would remove too much content.
     """
-    # Build set of line numbers to skip
+    last_non_blank = 0
+    for i in range(len(lines) - 1, -1, -1):
+        if lines[i].strip():
+            last_non_blank = i + 1  # 1-based
+            break
+
+    if last_non_blank > 0:
+        for mb in metadata_blocks:
+            if mb.start_line <= last_non_blank <= mb.end_line:
+                raise MetadataStripRefused(
+                    f"refusing metadata strip: block [{mb.start_line}-{mb.end_line}] "
+                    f"covers the final spoken line ({last_non_blank})"
+                )
+
+    total_non_blank = sum(1 for line in lines if line.strip())
+
     skip_lines: set[int] = set()
     for mb in metadata_blocks:
         for ln in range(mb.start_line, mb.end_line + 1):
@@ -151,6 +175,18 @@ def _strip_metadata_blocks(
         line_num = i + 1  # 1-based
         if line_num not in skip_lines:
             result.append((line_num, line))
+
+    if total_non_blank > 0:
+        result_non_blank = sum(1 for _, line in result if line.strip())
+        removed_non_blank = total_non_blank - result_non_blank
+        if removed_non_blank / total_non_blank > METADATA_STRIP_MAX_RATIO:
+            pct = int(removed_non_blank / total_non_blank * 100)
+            raise MetadataStripRefused(
+                f"refusing metadata strip: would remove {pct}% of spoken lines "
+                f"({removed_non_blank} of {total_non_blank}); limit is "
+                f"{int(METADATA_STRIP_MAX_RATIO * 100)}%"
+            )
+
     return result
 
 
@@ -1875,6 +1911,9 @@ def format_script(
     # Strip metadata blocks if toggle is on
     if toggles.strip_metadata and preflight.metadata_blocks:
         numbered_lines = _strip_metadata_blocks(lines, preflight.metadata_blocks)
+        removed = len(lines) - len(numbered_lines)
+        if removed > 0:
+            print(f"Stripped {removed} metadata line(s)")
     else:
         numbered_lines = [(i + 1, line) for i, line in enumerate(lines)]
 
