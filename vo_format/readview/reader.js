@@ -18,8 +18,6 @@
   var el = {
     hud: document.getElementById("hud"),
     play: document.getElementById("play"),
-    slower: document.getElementById("slower"),
-    faster: document.getElementById("faster"),
     wpmdown: document.getElementById("wpmdown"),
     wpmup: document.getElementById("wpmup"),
     smaller: document.getElementById("smaller"),
@@ -364,7 +362,7 @@
 
   // --- touch: down freezes, drag repositions, lift glides -------------------
   document.addEventListener("touchstart", function (e) {
-    if (e.target.closest("#hud, .zone")) { return; }
+    if (e.target.closest("#hud")) { return; }
     touchSeen = true;
     stopGlide();                      // a finger down always means "stop here"
     held = true;
@@ -407,7 +405,7 @@
   // stands down the moment a real touch arrives, because iOS follows a tap with
   // synthetic mouse events and a second hold would toggle the mark back off.
   document.addEventListener("mousedown", function (e) {
-    if (touchSeen || e.target.closest("#hud, .zone")) { return; }
+    if (touchSeen || e.target.closest("#hud")) { return; }
     startHold(e.clientX, e.clientY);
   });
 
@@ -467,8 +465,6 @@
   }
 
   el.play.addEventListener("click", toggle);
-  holdRepeat(el.slower, function () { nudgeWpm(-WPM_STEP); });
-  holdRepeat(el.faster, function () { nudgeWpm(WPM_STEP); });
   holdRepeat(el.wpmdown, function () { nudgeWpm(-WPM_STEP); });
   holdRepeat(el.wpmup, function () { nudgeWpm(WPM_STEP); });
   el.smaller.addEventListener("click", function () { nudgeSize(-SIZE_STEP); });

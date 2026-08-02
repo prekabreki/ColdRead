@@ -70,6 +70,42 @@ class TestSelfContainment:
         assert "data:video/mp4;base64," in html
 
 
+class TestSpeedCluster:
+    """The wpm control is one grouped pair, and it lives inside the HUD."""
+
+    def _html(self) -> str:
+        return render(_script([_line("A line of body text.")]))
+
+    def test_the_edge_strips_are_gone(self) -> None:
+        html = self._html()
+        assert 'class="zone"' not in html
+        assert ".zone" not in html          # the CSS rules too
+
+    def test_the_cluster_is_inside_the_hud(self) -> None:
+        # Region-based, and the region is what matters: outside #hud the page
+        # still LOOKS right while pressing the cluster scrubs the script,
+        # because the touch handler's exemption is keyed on #hud.
+        html = self._html()
+        hud_open = html.index('<div id="hud">')
+        hud_end = html.index('<video id="awake"')
+        hud_block = html[hud_open:hud_end]
+        assert '<div id="speed">' in hud_block
+        assert 'id="wpmdown"' in hud_block
+        assert 'id="wpmup"' in hud_block
+
+    def test_minus_comes_before_plus(self) -> None:
+        html = self._html()
+        assert html.index('id="wpmdown"') < html.index('id="wpmup"')
+
+    def test_the_buttons_are_not_split_by_the_status_readout(self) -> None:
+        html = self._html()
+        status = html.index('id="status"')
+        assert not (html.index('id="wpmdown"') < status < html.index('id="wpmup"'))
+
+    def test_the_cluster_has_a_css_rule(self) -> None:
+        assert "#speed {" in self._html()
+
+
 class TestStructure:
     def test_every_line_becomes_one_paragraph(self) -> None:
         html = render(_script([_line("alpha"), _line("bravo"), _line("charlie")]))
@@ -319,8 +355,11 @@ class TestReaderContract:
         css = (pkg / "reader.css").read_text(encoding="utf-8")
         html = render(_script([_line("alpha")]))
 
-        assert 'closest("#hud, .zone")' in js
-        assert 'id="hud"' in html and 'class="zone"' in html
+        assert 'closest("#hud")' in js
+        # #speed has no exemption of its own; it inherits #hud's by being a
+        # child of it. If the cluster ever moves out, this pairing is the only
+        # thing standing between a press and a scrubbed script.
+        assert 'id="hud"' in html and 'id="speed"' in html
         assert "--font-size" in js and "--font-size" in css
         assert 'data-theme="light"' in css
         assert 'data-theme="dark"' in html

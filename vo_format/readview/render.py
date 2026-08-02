@@ -82,9 +82,10 @@ def render(script: ReadScript, library: str | None = None) -> str:
     display = escape(display)
     variant_suffix = f" &middot; {variant} cut" if variant else ""
     lines = "\n".join(_line_html(line) for line in script.lines)
-    # The button lives in #hud on purpose. The touch handler already exempts
-    # #hud from the freeze-and-drag gesture, so a control placed anywhere else
-    # would scrub the script under the finger on its way out.
+    # The button lives in #hud on purpose. The touch handler exempts #hud from
+    # the freeze-and-drag gesture, so a control placed anywhere else would scrub
+    # the script under the finger on its way out. #speed rides on the same
+    # exemption, which is why it is a child of #hud rather than a sibling.
     library_attr = f' data-library="{escape(library)}"' if library else ""
     back_button = (
         '<button id="back" type="button" aria-label="Back to library">'
@@ -107,8 +108,6 @@ maximum-scale=1, viewport-fit=cover">
 </head>
 <body data-words-per-line="{script.words_per_line:.1f}" data-title="{title}"\
  data-words="{script.word_count}"{library_attr}>
-<div class="zone" id="slower">&minus;</div>
-<div class="zone" id="faster">+</div>
 <div id="script">
 <p class="hdr l b" style="font-size:1.4em">{display}</p>
 <p class="hdr l i">{len(script.lines)} lines &middot; {script.word_count} words \
@@ -116,13 +115,16 @@ maximum-scale=1, viewport-fit=cover">
 {lines}
 </div>
 <div id="hud">
-{back_button}<button id="smaller" type="button" aria-label="Smaller text">A&minus;</button>
+{back_button}<button id="smaller" type="button" aria-label="Smaller text">\
+A&minus;</button>
 <button id="bigger" type="button" aria-label="Larger text">A+</button>
 <button id="play" type="button" aria-label="Play or pause">&#9654;</button>
-<button id="wpmdown" type="button" aria-label="Slower">&minus;</button>
 <span id="status"></span>
-<button id="wpmup" type="button" aria-label="Faster">+</button>
 <button id="theme" type="button" aria-label="Toggle light or dark">&#9790;</button>
+<div id="speed">
+<button id="wpmdown" type="button" aria-label="Slower">&minus;</button>
+<button id="wpmup" type="button" aria-label="Faster">+</button>
+</div>
 </div>
 <video id="awake" muted loop playsinline preload="auto"
  src="data:video/mp4;base64,{KEEP_AWAKE_MP4_BASE64}"></video>
