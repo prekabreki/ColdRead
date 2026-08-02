@@ -30,7 +30,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["ruff", "mypy", "pytest>=8,<10"]
+dev = ["ruff", "mypy"]
 
 [project.urls]
 Homepage = "https://github.com/prekabreki/ColdRead"
