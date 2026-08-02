@@ -27,6 +27,8 @@
     back: document.getElementById("back"),      // absent unless --library
     sync: document.getElementById("sync"),      // absent unless --sync
     awake: document.getElementById("awake"),
+    zl: document.querySelector(".zl"),
+    zr: document.querySelector(".zr"),
     firstLine: document.querySelector(".bl")
   };
 
@@ -414,7 +416,7 @@
   // --- touch: down freezes, drag repositions, lift glides -------------------
   document.addEventListener("touchstart", function (e) {
     touchedYet = true;
-    if (e.target.closest("#hud")) { return; }
+    if (e.target.closest("#hud") || e.target.closest(".zone")) { return; }
     touchSeen = true;
     stopGlide();                      // a finger down always means "stop here"
     held = true;
@@ -524,6 +526,8 @@
   el.play.addEventListener("click", toggle);
   holdRepeat(el.wpmdown, function () { nudgeWpm(-WPM_STEP); });
   holdRepeat(el.wpmup, function () { nudgeWpm(WPM_STEP); });
+  if (el.zl) { holdRepeat(el.zl, function () { nudgeWpm(-WPM_STEP); }); }
+  if (el.zr) { holdRepeat(el.zr, function () { nudgeWpm(WPM_STEP); }); }
   el.smaller.addEventListener("click", function () { nudgeSize(-SIZE_STEP); });
   el.bigger.addEventListener("click", function () { nudgeSize(SIZE_STEP); });
   el.theme.addEventListener("click", function () {
@@ -595,4 +599,16 @@
   applySize();
   applyTheme();
   restore();
+
+  // Edge-strip discoverability: pulse to prominence on first load and fade to
+  // the resting opacity so the reader registers where they are without being
+  // told. The CSS transition handles the fade-out.
+  if (el.zl) {
+    el.zl.classList.add("zone-hint");
+    setTimeout(function () { el.zl.classList.remove("zone-hint"); }, 4000);
+  }
+  if (el.zr) {
+    el.zr.classList.add("zone-hint");
+    setTimeout(function () { el.zr.classList.remove("zone-hint"); }, 4000);
+  }
 })();
