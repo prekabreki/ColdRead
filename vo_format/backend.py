@@ -17,18 +17,162 @@ import os
 import shutil
 import subprocess
 from collections.abc import Callable
-from typing import Literal
+from typing import Literal, Protocol
 
+from ._backend_shared import DEFAULT_API_MODEL
 from .models import DiagnosticReport, FormattedBlock, PreflightResult
 from . import preflight as _api
 from . import claude_code_backend as _cli
 
-Backend = Literal["api", "claude-code"]
+BackendName = Literal["api", "claude-code"]
 
-VALID_BACKENDS: tuple[Backend, ...] = ("api", "claude-code")
+VALID_BACKENDS: tuple[BackendName, ...] = ("api", "claude-code")
 
 
-def resolve_backend(requested: str | None) -> Backend:
+class Backend(Protocol):
+    """Protocol satisfied by both analysis backends.
+
+    Each method mirrors the inner signature of the corresponding function
+    in `preflight.py` / `claude_code_backend.py` (no leading `backend`
+    argument — that is handled by the dispatcher in this module).
+    """
+
+    def run_preflight(
+        self,
+        script_text: str,
+        filename: str,
+        api_key: str | None = None,
+        model: str | None = None,
+        *,
+        process_registry: Callable[[subprocess.Popen[str] | None], None] | None = None,
+    ) -> PreflightResult: ...
+
+    def run_pronunciation(
+        self,
+        words: list[str],
+        script_context: str,
+        api_key: str | None = None,
+        model: str | None = None,
+        *,
+        process_registry: Callable[[subprocess.Popen[str] | None], None] | None = None,
+    ) -> dict[str, str]: ...
+
+    def run_diagnostic(
+        self,
+        script_text: str,
+        preflight_result: PreflightResult,
+        formatted_blocks: list[FormattedBlock],
+        api_key: str | None = None,
+        model: str | None = None,
+        *,
+        process_registry: Callable[[subprocess.Popen[str] | None], None] | None = None,
+    ) -> DiagnosticReport: ...
+
+
+class _APIBackendImpl:
+    """Adapter that applies the API model default before delegating."""
+
+    def run_preflight(
+        self,
+        script_text: str,
+        filename: str,
+        api_key: str | None = None,
+        model: str | None = None,
+        *,
+        process_registry: Callable[[subprocess.Popen[str] | None], None] | None = None,
+    ) -> PreflightResult:
+        return _api.run_preflight(
+            script_text, filename, api_key=api_key,
+            model=model or DEFAULT_API_MODEL,
+        )
+
+    def run_pronunciation(
+        self,
+        words: list[str],
+        script_context: str,
+        api_key: str | None = None,
+        model: str | None = None,
+        *,
+        process_registry: Callable[[subprocess.Popen[str] | None], None] | None = None,
+    ) -> dict[str, str]:
+        return _api.run_pronunciation(
+            words, script_context, api_key=api_key,
+            model=model or DEFAULT_API_MODEL,
+        )
+
+    def run_diagnostic(
+        self,
+        script_text: str,
+        preflight_result: PreflightResult,
+        formatted_blocks: list[FormattedBlock],
+        api_key: str | None = None,
+        model: str | None = None,
+        *,
+        process_registry: Callable[[subprocess.Popen[str] | None], None] | None = None,
+    ) -> DiagnosticReport:
+        return _api.run_diagnostic(
+            script_text, preflight_result, formatted_blocks,
+            api_key=api_key, model=model or DEFAULT_API_MODEL,
+        )
+
+
+class _ClaudeCodeBackendImpl:
+    """Adapter that passes `model` through — the subprocess backend handles
+    its own default (`claude_code_backend.DEFAULT_MODEL`)."""
+
+    def run_preflight(
+        self,
+        script_text: str,
+        filename: str,
+        api_key: str | None = None,
+        model: str | None = None,
+        *,
+        process_registry: Callable[[subprocess.Popen[str] | None], None] | None = None,
+    ) -> PreflightResult:
+        return _cli.run_preflight(
+            script_text, filename, api_key=api_key, model=model,
+            process_registry=process_registry,
+        )
+
+    def run_pronunciation(
+        self,
+        words: list[str],
+        script_context: str,
+        api_key: str | None = None,
+        model: str | None = None,
+        *,
+        process_registry: Callable[[subprocess.Popen[str] | None], None] | None = None,
+    ) -> dict[str, str]:
+        return _cli.run_pronunciation(
+            words, script_context, api_key=api_key, model=model,
+            process_registry=process_registry,
+        )
+
+    def run_diagnostic(
+        self,
+        script_text: str,
+        preflight_result: PreflightResult,
+        formatted_blocks: list[FormattedBlock],
+        api_key: str | None = None,
+        model: str | None = None,
+        *,
+        process_registry: Callable[[subprocess.Popen[str] | None], None] | None = None,
+    ) -> DiagnosticReport:
+        return _cli.run_diagnostic(
+            script_text, preflight_result, formatted_blocks,
+            api_key=api_key, model=model,
+            process_registry=process_registry,
+        )
+
+
+def get_backend(name: BackendName) -> Backend:
+    """Return a Protocol-conforming backend for the given name."""
+    if name == "claude-code":
+        return _ClaudeCodeBackendImpl()
+    return _APIBackendImpl()
+
+
+def resolve_backend(requested: str | None) -> BackendName:
     """Resolve the backend to use.
 
     Explicit request wins. Otherwise: env var VO_FORMAT_BACKEND, otherwise
@@ -67,16 +211,10 @@ def run_preflight(
     process_registry: Callable[[subprocess.Popen[str] | None], None] | None = None,
 ) -> PreflightResult:
     chosen = resolve_backend(backend)
-    if chosen == "claude-code":
-        return _cli.run_preflight(
-            script_text, filename, api_key=api_key, model=model,
-            process_registry=process_registry,
-        )
-    return _api.run_preflight(
-        script_text,
-        filename,
-        api_key=api_key,
-        model=model or "claude-sonnet-4-5-20250929",
+    impl = get_backend(chosen)
+    return impl.run_preflight(
+        script_text, filename, api_key=api_key, model=model,
+        process_registry=process_registry,
     )
 
 
@@ -90,16 +228,10 @@ def run_pronunciation(
     process_registry: Callable[[subprocess.Popen[str] | None], None] | None = None,
 ) -> dict[str, str]:
     chosen = resolve_backend(backend)
-    if chosen == "claude-code":
-        return _cli.run_pronunciation(
-            words, script_context, api_key=api_key, model=model,
-            process_registry=process_registry,
-        )
-    return _api.run_pronunciation(
-        words,
-        script_context,
-        api_key=api_key,
-        model=model or "claude-sonnet-4-5-20250929",
+    impl = get_backend(chosen)
+    return impl.run_pronunciation(
+        words, script_context, api_key=api_key, model=model,
+        process_registry=process_registry,
     )
 
 
@@ -114,15 +246,9 @@ def run_diagnostic(
     process_registry: Callable[[subprocess.Popen[str] | None], None] | None = None,
 ) -> DiagnosticReport:
     chosen = resolve_backend(backend)
-    if chosen == "claude-code":
-        return _cli.run_diagnostic(
-            script_text, preflight_result, formatted_blocks, api_key=api_key, model=model,
-            process_registry=process_registry,
-        )
-    return _api.run_diagnostic(
-        script_text,
-        preflight_result,
-        formatted_blocks,
-        api_key=api_key,
-        model=model or "claude-sonnet-4-5-20250929",
+    impl = get_backend(chosen)
+    return impl.run_diagnostic(
+        script_text, preflight_result, formatted_blocks,
+        api_key=api_key, model=model,
+        process_registry=process_registry,
     )

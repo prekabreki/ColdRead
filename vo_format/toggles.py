@@ -191,6 +191,7 @@ ARCHETYPE_DEFAULTS: dict[Archetype, dict[str, Any]] = {
         "source_labels": False,
         "quoted_text_style": "indent+italic",
         "character_legend": False,
+        "strip_metadata": False,
     },
     Archetype.CONTINUOUS_PROSE: {
         "color_characters": False,

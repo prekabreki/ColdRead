@@ -15,7 +15,7 @@ from rich.table import Table
 from rich.text import Text
 
 from .colors import assign_colors
-from .formatter import format_script
+from .formatter import format_script, MetadataStripRefused
 from .models import (
     Archetype,
     FormatToggles,
@@ -573,10 +573,15 @@ def main() -> None:
 
     # Step 5: Format
     console.print("  Formatting...", end="")
-    blocks = format_script(
-        normalized, preflight, toggles, filename,
-        pronunciation_guide=pronunciation_guide or None,
-    )
+    try:
+        blocks = format_script(
+            normalized, preflight, toggles, filename,
+            pronunciation_guide=pronunciation_guide or None,
+        )
+    except MetadataStripRefused as e:
+        console.print(" [red]rejected[/red]")
+        sys.stderr.write(f"{e}\n")
+        sys.exit(1)
     console.print(f" [green]done[/green] ({len(blocks)} blocks)")
 
     # Step 5b: Terminal preview (optional)

@@ -188,6 +188,50 @@ That is the invocation it's built for. Generating the index where the files
 actually are matters if you ever publish one channel at a time — an index built
 somewhere else would quietly omit whatever that run didn't stage.
 
+### The library server
+
+`coldread-serve` is a small, stdlib-only HTTP server that runs on the
+always-on Pi. It serves a directory whose immediate subdirectories are
+channels (`CL/`, `BoP/`), rendering a grouped index at `/` and serving
+individual read-view pages from a slug→path allowlist built once at startup.
+
+```bash
+coldread-serve --library ~/coldread-library --token-file ~/.config/coldread/serve.token
+```
+
+It imports **nothing outside the Python standard library** — no `vo_format`, no
+PyPI packages — so it can run on a 416MB Pi with nothing installed. A test
+AST-walks its imports against `sys.stdlib_module_names` to keep it that way.
+
+**Security posture.** The server is read-only (GET and HEAD only — everything
+else returns 405) with no write endpoints. Auth is a 256-bit urlsafe token
+generated on first run and compared with `hmac.compare_digest`; loading
+`/?k=<token>` sets an `HttpOnly`, `SameSite=Strict` cookie so later requests
+authenticate without the token in the URL. `Host` is checked against addresses
+detected at startup. `Origin` and `Sec-Fetch-Site` are rejected when present
+and not same-origin; absence is allowed (a bookmark tap sends neither).
+`log_message` is overridden to strip the query string so the token never
+reaches a log line. The server refuses to start on a missing library directory,
+an unreadable token file, a busy port, or an empty index — each with a named,
+non-zero exit.
+
+### Publishing to the Pi
+
+Rsync one invocation per channel; a single `rsync` with two sources ending in
+`/` would merge both channels into a flat destination and lose the `CL`/`BoP`
+distinction — and `--delete` with multiple sources is not well defined:
+
+```bash
+for ch in CL BoP; do
+  rsync -av --delete --include='*.html' --exclude='*' \
+    "$HOME/OneDrive/$ch/ready/" "<pi-host>:~/coldread-library/$ch/"
+done
+```
+
+The Pi cannot see the rig's PDFs, so it cannot know it is behind. Each index
+row shows its derivation date instead — "derived 3 days ago" is honest, and
+better than trusting a green checkmark the Pi has no way to earn.
+
 **Two things the pages need from however you serve them.** They want **HTTPS**,
 because keeping a tablet awake needs `navigator.wakeLock` and browsers only
 expose that in a secure context; over plain HTTP an iPad dimmed and slept inside

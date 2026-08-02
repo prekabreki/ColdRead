@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from vo_format.models import Archetype, FormatToggles, MarginPreset, QuotedTextStyle
 from vo_format.toggles import ARCHETYPE_DEFAULTS, resolve_toggles
 
@@ -65,3 +67,43 @@ def test_every_archetype_resolves():
         assert isinstance(t, FormatToggles)
         # Every known archetype must appear in the defaults map.
         assert arch in ARCHETYPE_DEFAULTS
+
+
+# ---------------------------------------------------------------------------
+# FormatToggles validation
+# ---------------------------------------------------------------------------
+
+class TestFormatTogglesValidation:
+    """``FormatToggles.__post_init__`` rejects out-of-range values."""
+
+    def test_defaults_pass_validation(self):
+        FormatToggles()
+
+    def test_font_size_negative_rejected(self):
+        with pytest.raises(ValueError):
+            FormatToggles(font_size=-5)
+
+    def test_font_size_zero_rejected(self):
+        with pytest.raises(ValueError):
+            FormatToggles(font_size=0)
+
+    def test_font_size_15_rejected(self):
+        with pytest.raises(ValueError):
+            FormatToggles(font_size=15)
+
+    def test_font_size_valid_accepted(self):
+        for valid in (12, 14, 16, 18):
+            FormatToggles(font_size=valid)
+
+    def test_line_spacing_zero_rejected(self):
+        with pytest.raises(ValueError):
+            FormatToggles(line_spacing=0.0)
+
+    def test_line_spacing_negative_rejected(self):
+        with pytest.raises(ValueError):
+            FormatToggles(line_spacing=-1.0)
+
+    def test_line_spacing_valid_accepted(self):
+        FormatToggles(line_spacing=1.5)
+        FormatToggles(line_spacing=2.0)
+        FormatToggles(line_spacing=3.0)

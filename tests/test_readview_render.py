@@ -80,10 +80,12 @@ class TestSpeedCluster:
     def _html(self) -> str:
         return render(_script([_line("A line of body text.")]))
 
-    def test_the_edge_strips_are_gone(self) -> None:
+    def test_the_edge_strips_are_present_and_discoverable(self) -> None:
         html = self._html()
-        assert 'class="zone"' not in html
-        assert ".zone" not in html          # the CSS rules too
+        assert 'class="zone zl"' in html
+        assert 'class="zone zr"' in html
+        assert ".zone" in html          # the CSS rules too
+        assert ".zone-hint" in html     # and the discoverability hint class
 
     def test_the_cluster_is_inside_the_hud(self) -> None:
         # Region-based, and the region is what matters: outside #hud the page
@@ -217,6 +219,143 @@ class TestStructure:
     def test_body_text_carries_no_colour_so_it_follows_the_theme(self) -> None:
         html = render(_script([_line("plain narration")]))
         assert "--c:" not in html
+
+    # -- title suppression ---------------------------------------------------
+
+    def test_heading_is_suppressed_when_first_line_repeats_title(self) -> None:
+        html = render(
+            _script(
+                [_line("Kingdom Hearts Dark Road", size_ratio=1.3, bold=True),
+                 _line("The corridor was quiet,")],
+                title="Kingdom Hearts Dark Road",
+            )
+        )
+        assert ">Kingdom Hearts Dark Road</p>" in html      # PDF line present
+        assert 'class="hdr l b"' not in html               # heading suppressed
+
+    def test_heading_is_suppressed_when_title_wraps_two_lines(self) -> None:
+        html = render(
+            _script(
+                [_line("The Complete Story of Kingdom Hearts Dark", size_ratio=1.3),
+                 _line("Road", size_ratio=1.3),
+                 _line("The corridor was quiet,")],
+                title="The Complete Story of Kingdom Hearts Dark Road",
+            )
+        )
+        assert "Complete Story of Kingdom Hearts Dark" in html
+        assert "<p" in html.split("Road</p>")[1]           # second PDF line rendered
+        assert 'class="hdr l b"' not in html               # heading suppressed
+
+    def test_heading_is_suppressed_case_insensitively(self) -> None:
+        html = render(
+            _script(
+                [_line("KINGDOM HEARTS DARK ROAD", size_ratio=1.3, bold=True),
+                 _line("The corridor was quiet,")],
+                title="Kingdom Hearts Dark Road",
+            )
+        )
+        assert ">KINGDOM HEARTS DARK ROAD</p>" in html
+        assert 'class="hdr l b"' not in html               # heading suppressed
+
+    def test_heading_is_suppressed_with_whitespace_collapsed(self) -> None:
+        html = render(
+            _script(
+                [_line("Kingdom   Hearts   Dark   Road", size_ratio=1.3, bold=True),
+                 _line("The corridor was quiet,")],
+                title="Kingdom Hearts Dark Road",
+            )
+        )
+        assert ">Kingdom   Hearts   Dark   Road</p>" in html
+        assert 'class="hdr l b"' not in html               # heading suppressed
+
+    def test_heading_is_kept_when_first_lines_do_not_match(self) -> None:
+        html = render(
+            _script(
+                [_line("Prologue: The Keyblade War", size_ratio=1.3, bold=True),
+                 _line("The corridor was quiet,")],
+                title="Kingdom Hearts Dark Road",
+            )
+        )
+        assert 'class="hdr l b"' in html
+        assert ">Kingdom Hearts Dark Road</p>" in html
+
+    def test_heading_is_kept_when_script_has_no_lines(self) -> None:
+        html = render(_script([], title="Kingdom Hearts Dark Road"))
+        assert 'class="hdr l b"' in html
+        assert ">Kingdom Hearts Dark Road</p>" in html
+
+    def test_subtitle_is_present_even_when_heading_is_suppressed(self) -> None:
+        html = render(
+            _script(
+                [_line("Kingdom Hearts Dark Road", size_ratio=1.3, bold=True),
+                 _line("The corridor was quiet,")],
+                title="Kingdom Hearts Dark Road",
+            )
+        )
+        assert "lines" in html.split("</style>")[1].split('<p class="l"')[0]
+        assert "words" in html.split("</style>")[1].split('<p class="l"')[0]
+        assert "derived" in html.split("</style>")[1].split('<p class="l"')[0]
+
+    def test_heading_is_suppressed_when_filename_has_ep_abbreviation(self) -> None:
+        """Ep1 (filename) must match Episode 1 (PDF line)."""
+        html = render(
+            _script(
+                [_line("Bloodborne Episode 1 Blood Ministry v1.1", size_ratio=1.3, bold=True),
+                 _line("The hunter awoke.")],
+                title="Bloodborne Ep1 - Blood Ministry - formatted",
+            )
+        )
+        assert ">Bloodborne Episode 1 Blood Ministry v1.1</p>" in html
+        assert 'class="hdr l b"' not in html
+
+    def test_heading_is_suppressed_when_pdf_has_trailing_version(self) -> None:
+        """A PDF line ending in v5 must match a display title without it."""
+        html = render(
+            _script(
+                [_line("Warhammer 40K Episode 4 The Burning v5", size_ratio=1.3, bold=True),
+                 _line("The planet burned.")],
+                title="Warhammer 40K Ep4 - The Burning",
+            )
+        )
+        assert "Warhammer 40K Episode 4 The Burning v5" in html
+        assert 'class="hdr l b"' not in html
+
+    def test_heading_is_suppressed_when_filename_has_dash_separators(self) -> None:
+        """  -   separators in filename must match plain spaces in PDF line."""
+        html = render(
+            _script(
+                [_line("Disco Elysium Episode 1 The Officer in the Mirror", size_ratio=1.3, bold=True),
+                 _line("The detective opened his eyes.")],
+                title="Disco Elysium Ep1 - The Officer in the Mirror",
+            )
+        )
+        assert "Disco Elysium Episode 1 The Officer in the Mirror" in html
+        assert 'class="hdr l b"' not in html
+
+    def test_heading_is_kept_when_pdf_starts_with_batch_header(self) -> None:
+        """A BATCH n: header must never suppress the heading."""
+        html = render(
+            _script(
+                [_line("BATCH 1: ALFRED", size_ratio=1.3, bold=True),
+                 _line("The hunter awoke.")],
+                title="Bloodborne Ep1 - Blood Ministry - batched",
+            )
+        )
+        assert 'class="hdr l b"' in html
+        assert "Bloodborne Ep1 - Blood Ministry</p>" in html
+
+    def test_pdf_content_lines_are_always_present(self) -> None:
+        for title in ("Kingdom Hearts Dark Road", "Something Else"):
+            html = render(
+                _script(
+                    [_line("Kingdom Hearts Dark Road", size_ratio=1.3, bold=True),
+                     _line("The corridor was quiet,"),
+                     _line("and nothing moved.")],
+                    title=title,
+                )
+            )
+            assert "The corridor was quiet," in html
+            assert "and nothing moved." in html
 
 
 class TestEscaping:
