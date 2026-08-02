@@ -41,6 +41,7 @@ Issues = "https://github.com/prekabreki/ColdRead/issues"
 coldread = "vo_format.cli:main"
 coldread-readview = "vo_format.readview.cli:_entry"
 coldread-state = "vo_format.readview.state:_entry"
+coldread-serve = "vo_format.readview.serve:_entry"
 
 [project.gui-scripts]
 coldread-gui = "vo_format.gui_main:gui_main"
