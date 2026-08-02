@@ -8,7 +8,8 @@ classification surface immediately.
 
 from __future__ import annotations
 
-from vo_format.formatter import format_script
+from vo_format.formatter import format_script, MetadataStripRefused, METADATA_STRIP_MAX_RATIO
+from vo_format.formatter import _strip_metadata_blocks
 from vo_format.models import (
     Archetype,
     BlockType,
@@ -95,7 +96,7 @@ def test_metadata_blocks_are_stripped_when_toggle_on():
         MetadataBlock(type="youtube_title", start_line=2, end_line=2)
     ]
     toggles = resolve_toggles(Archetype.SINGLE_NARRATOR)
-    assert toggles.strip_metadata is True
+    toggles.strip_metadata = True
 
     blocks = format_script(text, preflight, toggles, "t.md")
     joined = "\n".join(b.text for b in blocks)
@@ -187,3 +188,242 @@ def test_metadata_survives_when_strip_metadata_off():
     assert "Keep me" in joined
     assert "Line one" in joined
     assert "Line two" in joined
+
+
+# ---------------------------------------------------------------------------
+# Metadata strip refusal tests
+# ---------------------------------------------------------------------------
+
+
+def test_strip_refuses_when_ratio_exceeded():
+    from vo_format.models import MetadataBlock
+
+    text = normalize_text(
+        "Line one.\n"
+        "Line two.\n"
+        "Line three.\n"
+        "Line four.\n"
+        "Line five.\n"
+        "Line six.\n"
+    )
+    preflight = _empty_preflight(Archetype.SINGLE_NARRATOR)
+    preflight.metadata_blocks = [
+        MetadataBlock(type="metadata", start_line=2, end_line=5)
+    ]
+    toggles = resolve_toggles(Archetype.SINGLE_NARRATOR)
+    toggles.strip_metadata = True
+    try:
+        format_script(text, preflight, toggles, "t.md")
+        assert False, "expected MetadataStripRefused"
+    except MetadataStripRefused as e:
+        msg = str(e)
+        assert "would remove" in msg
+        assert "%" in msg
+        assert "limit is" in msg
+
+
+def test_strip_refuses_when_tail_covered():
+    from vo_format.models import MetadataBlock
+
+    text = normalize_text(
+        "Line one.\n"
+        "Line two.\n"
+        "And so ends the complete story of our adventure.\n"
+    )
+    preflight = _empty_preflight(Archetype.SINGLE_NARRATOR)
+    preflight.metadata_blocks = [
+        MetadataBlock(type="outro", start_line=3, end_line=3)
+    ]
+    toggles = resolve_toggles(Archetype.SINGLE_NARRATOR)
+    toggles.strip_metadata = True
+    try:
+        format_script(text, preflight, toggles, "t.md")
+        assert False, "expected MetadataStripRefused"
+    except MetadataStripRefused as e:
+        msg = str(e)
+        assert "covers the final spoken line" in msg
+
+
+def test_tail_refusal_fires_regardless_of_ratio():
+    from vo_format.models import MetadataBlock
+
+    text = normalize_text(
+        "Line one.\n"
+        "Line two.\n"
+        "Line three.\n"
+        "Line four.\n"
+        "Line five.\n"
+        "Line six.\n"
+        "Line seven.\n"
+        "Line eight.\n"
+        "Line nine.\n"
+        "The final spoken line.\n"
+    )
+    preflight = _empty_preflight(Archetype.SINGLE_NARRATOR)
+    preflight.metadata_blocks = [
+        MetadataBlock(type="outro", start_line=10, end_line=10)
+    ]
+    toggles = resolve_toggles(Archetype.SINGLE_NARRATOR)
+    toggles.strip_metadata = True
+    try:
+        format_script(text, preflight, toggles, "t.md")
+        assert False, "expected MetadataStripRefused"
+    except MetadataStripRefused as e:
+        msg = str(e)
+        assert "covers the final spoken line" in msg
+        assert "10" in msg
+
+
+def test_small_metadata_strip_still_works():
+    from vo_format.models import MetadataBlock
+
+    text = normalize_text(
+        "Line one.\n"
+        "Line two.\n"
+        "Line three.\n"
+        "YOUTUBE TITLE: remove me\n"
+        "Line four.\n"
+        "Line five.\n"
+        "Line six.\n"
+        "Line seven.\n"
+        "Line eight.\n"
+        "Line nine.\n"
+        "Final line.\n"
+    )
+    preflight = _empty_preflight(Archetype.SINGLE_NARRATOR)
+    preflight.metadata_blocks = [
+        MetadataBlock(type="youtube_title", start_line=4, end_line=4)
+    ]
+    toggles = resolve_toggles(Archetype.SINGLE_NARRATOR)
+    toggles.strip_metadata = True
+    toggles.title_page = False
+    toggles.character_legend = False
+    blocks = format_script(text, preflight, toggles, "t.md")
+    joined = "\n".join(b.text for b in blocks)
+    assert "remove me" not in joined
+    assert "Final line" in joined
+
+
+def test_empty_metadata_blocks_is_noop():
+    from vo_format.models import MetadataBlock
+
+    text = normalize_text("Line one.\nLine two.\n")
+    preflight = _empty_preflight(Archetype.SINGLE_NARRATOR)
+    preflight.metadata_blocks = []
+    toggles = resolve_toggles(Archetype.SINGLE_NARRATOR)
+    toggles.strip_metadata = True
+    blocks = format_script(text, preflight, toggles, "t.md")
+    joined = "\n".join(b.text for b in blocks)
+    assert "Line one" in joined
+    assert "Line two" in joined
+
+
+def test_metadata_block_at_line_1():
+    from vo_format.models import MetadataBlock
+
+    text = normalize_text(
+        "RUNTIME: 120 min\n"
+        "Real content line one.\n"
+        "Real content line two.\n"
+        "Real content line three.\n"
+        "Final line.\n"
+    )
+    preflight = _empty_preflight(Archetype.SINGLE_NARRATOR)
+    preflight.metadata_blocks = [
+        MetadataBlock(type="runtime", start_line=1, end_line=1)
+    ]
+    toggles = resolve_toggles(Archetype.SINGLE_NARRATOR)
+    toggles.strip_metadata = True
+    toggles.title_page = False
+    toggles.character_legend = False
+    blocks = format_script(text, preflight, toggles, "t.md")
+    joined = "\n".join(b.text for b in blocks)
+    assert "120 min" not in joined
+    assert "Final line" in joined
+
+
+def test_all_blank_lines_not_refused():
+    from vo_format.models import MetadataBlock
+
+    text = normalize_text("\n\n\n\n")
+    preflight = _empty_preflight(Archetype.SINGLE_NARRATOR)
+    preflight.metadata_blocks = [
+        MetadataBlock(type="metadata", start_line=1, end_line=4)
+    ]
+    toggles = resolve_toggles(Archetype.SINGLE_NARRATOR)
+    toggles.strip_metadata = True
+    blocks = format_script(text, preflight, toggles, "t.md")
+    assert isinstance(blocks, list)
+
+
+def test_single_narrator_default_strip_metadata_is_false():
+    toggles = resolve_toggles(Archetype.SINGLE_NARRATOR)
+    assert toggles.strip_metadata is False
+
+
+def test_overlapping_blocks_still_refuse_tail():
+    from vo_format.models import MetadataBlock
+
+    text = normalize_text(
+        "A line.\n"
+        "Another line.\n"
+        "The final sentence.\n"
+    )
+    preflight = _empty_preflight(Archetype.SINGLE_NARRATOR)
+    preflight.metadata_blocks = [
+        MetadataBlock(type="meta1", start_line=1, end_line=2),
+        MetadataBlock(type="meta2", start_line=2, end_line=3),
+    ]
+    toggles = resolve_toggles(Archetype.SINGLE_NARRATOR)
+    toggles.strip_metadata = True
+    try:
+        format_script(text, preflight, toggles, "t.md")
+        assert False, "expected MetadataStripRefused"
+    except MetadataStripRefused as e:
+        assert "covers the final spoken line" in str(e)
+
+
+def test_blocks_without_end_line_coverage_are_not_refused():
+    from vo_format.models import MetadataBlock
+
+    text = normalize_text(
+        "Line one.\n"
+        "Line two.\n"
+        "Line three.\n"
+        "Final line.\n"
+    )
+    preflight = _empty_preflight(Archetype.SINGLE_NARRATOR)
+    preflight.metadata_blocks = [
+        MetadataBlock(type="metadata", start_line=2, end_line=3)
+    ]
+    toggles = resolve_toggles(Archetype.SINGLE_NARRATOR)
+    toggles.strip_metadata = True
+    toggles.title_page = False
+    toggles.character_legend = False
+    blocks = format_script(text, preflight, toggles, "t.md")
+    joined = "\n".join(b.text for b in blocks)
+    assert "Final line" in joined
+    assert "Line one" in joined
+
+
+def test_ratio_boundary_exactly_half_is_not_refused():
+    from vo_format.models import MetadataBlock
+
+    text = normalize_text(
+        "Line one.\n"
+        "Line two.\n"
+        "Line three.\n"
+        "Line four.\n"
+    )
+    preflight = _empty_preflight(Archetype.SINGLE_NARRATOR)
+    preflight.metadata_blocks = [
+        MetadataBlock(type="metadata", start_line=1, end_line=2)
+    ]
+    toggles = resolve_toggles(Archetype.SINGLE_NARRATOR)
+    toggles.strip_metadata = True
+    toggles.title_page = False
+    toggles.character_legend = False
+    blocks = format_script(text, preflight, toggles, "t.md")
+    joined = "\n".join(b.text for b in blocks)
+    assert "Line three" in joined
+    assert "Line four" in joined
