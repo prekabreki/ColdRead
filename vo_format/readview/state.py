@@ -13,6 +13,10 @@ having to trust anyone's clock.
 
 from __future__ import annotations
 
+import json
+import os
+import pathlib
+import sys
 import time
 from typing import Callable
 
@@ -102,3 +106,68 @@ def apply_patch(fields: dict, patch: dict, clock: Clock) -> dict:
                 fields[namespace] = target
             target[name] = merged
     return fields
+
+
+class Store:
+    """The state file and the rules for changing it.
+
+    Not internally locked — `Handler` serialises access, because the lock has to
+    cover read-modify-write as one unit and only the caller knows where that
+    boundary is.
+    """
+
+    def __init__(self, path: pathlib.Path, clock: Clock | None = None) -> None:
+        self.path = pathlib.Path(path)
+        self.clock = clock or Clock()
+        self.fields: dict = {}
+
+    def load(self) -> None:
+        """Read the file. Any problem yields empty state and a loud stderr line.
+
+        Deliberately tolerant and deliberately not silent. Raising would take the
+        whole library down over a preferences file; staying quiet would let a
+        page conclude it is synced against state that is not there.
+        """
+        try:
+            raw = self.path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            self.fields = {}
+            return
+        except OSError as exc:
+            print(
+                f"state: {self.path} unreadable ({exc}); starting empty",
+                file=sys.stderr,
+            )
+            self.fields = {}
+            return
+        try:
+            parsed = json.loads(raw)
+        except ValueError as exc:
+            print(
+                f"state: {self.path} is not valid JSON ({exc}); starting empty",
+                file=sys.stderr,
+            )
+            self.fields = {}
+            return
+        self.fields = parsed if isinstance(parsed, dict) else {}
+
+    def snapshot(self) -> dict:
+        return {"now": self.clock.now(), "fields": self.fields}
+
+    def apply(self, patch: dict) -> dict:
+        apply_patch(self.fields, patch, self.clock)
+        self.save()
+        return self.snapshot()
+
+    def save(self) -> None:
+        """Write atomically, keeping one rotating backup.
+
+        temp + os.replace, so a crash mid-write leaves the previous file intact
+        rather than a truncated one. os.replace is atomic on POSIX and on Windows.
+        """
+        temp = self.path.with_name(self.path.name + ".tmp")
+        temp.write_text(json.dumps(self.fields, indent=1), encoding="utf-8")
+        if self.path.exists():
+            backup = self.path.with_name(self.path.name + ".bak")
+            os.replace(self.path, backup)
+        os.replace(temp, self.path)

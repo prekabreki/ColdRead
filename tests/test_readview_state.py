@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import json
+import pathlib
+
+import pytest
+
 from vo_format.readview.state import (
     MAX_AGE_MS,
     Clock,
+    Store,
     apply_patch,
     clamp_age,
     merge_field,
@@ -125,3 +131,76 @@ class TestApplyPatch:
     def test_it_returns_the_same_object_it_mutated(self) -> None:
         fields: dict = {}
         assert apply_patch(fields, {}, self._clock(1000)) is fields
+
+
+class TestStore:
+    def test_an_absent_file_loads_as_empty(self, tmp_path: pathlib.Path) -> None:
+        store = Store(tmp_path / "state.json")
+        store.load()
+        assert store.fields == {}
+
+    def test_a_corrupt_file_loads_as_empty_and_says_so(
+        self, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        # It must NOT raise: refusing to start would take the library down over
+        # a preferences file. But it must not be silent either — a page that
+        # believes it is synced against nothing is the worst outcome here.
+        path = tmp_path / "state.json"
+        path.write_text("{not json", encoding="utf-8")
+        store = Store(path)
+        store.load()
+        assert store.fields == {}
+        assert "state.json" in capsys.readouterr().err
+
+    def test_a_snapshot_carries_now_and_fields(self, tmp_path: pathlib.Path) -> None:
+        store = Store(tmp_path / "state.json")
+        store.load()
+        snap = store.snapshot()
+        assert set(snap) == {"now", "fields"}
+        assert isinstance(snap["now"], int)
+
+    def test_apply_persists_to_disk(self, tmp_path: pathlib.Path) -> None:
+        path = tmp_path / "state.json"
+        store = Store(path)
+        store.load()
+        store.apply({"read": {"a.html": {"v": True}}})
+        on_disk = json.loads(path.read_text(encoding="utf-8"))
+        assert on_disk["read"]["a.html"]["v"] is True
+
+    def test_a_round_trip_survives_a_reload(self, tmp_path: pathlib.Path) -> None:
+        path = tmp_path / "state.json"
+        first = Store(path)
+        first.load()
+        first.apply({"read": {"a.html": {"v": True}}})
+        second = Store(path)
+        second.load()
+        assert second.fields["read"]["a.html"]["v"] is True
+
+    def test_saving_leaves_no_temp_file_behind(self, tmp_path: pathlib.Path) -> None:
+        path = tmp_path / "state.json"
+        store = Store(path)
+        store.load()
+        store.apply({"read": {"a.html": {"v": True}}})
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["state.json"]
+
+    def test_the_second_save_keeps_a_backup(self, tmp_path: pathlib.Path) -> None:
+        # The state file is the only thing on the serving host that is not
+        # reconstructible from a repo.
+        path = tmp_path / "state.json"
+        store = Store(path)
+        store.load()
+        store.apply({"read": {"a.html": {"v": True}}})
+        store.apply({"read": {"b.html": {"v": True}}})
+        assert (tmp_path / "state.json.bak").is_file()
+
+    def test_a_reload_after_a_backup_still_reads_the_live_file(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        path = tmp_path / "state.json"
+        store = Store(path)
+        store.load()
+        store.apply({"read": {"a.html": {"v": True}}})
+        store.apply({"read": {"b.html": {"v": True}}})
+        fresh = Store(path)
+        fresh.load()
+        assert set(fresh.fields["read"]) == {"a.html", "b.html"}
