@@ -56,6 +56,15 @@ line-length = 88
 target-version = "py310"
 lint.select = ["E", "F", "I"]
 
+[tool.pytest.ini_options]
+# Pin the rootdir onto sys.path so tests always import THIS checkout's vo_format.
+# ColdRead is installed editable, and the editable finder is interpreter-global: it
+# names one absolute vo_format path. Without this pin, a parallel git worktree
+# (foreman executors, .claude/worktrees subagents) can run the bare `pytest` console
+# script and silently import the MAIN clone's vo_format instead of its own — and the
+# tests still pass, so nothing surfaces it. Verified 2026-08-02 by reproducing the leak.
+pythonpath = ["."]
+
 [tool.mypy]
 python_version = "3.10"
 ignore_missing_imports = true
