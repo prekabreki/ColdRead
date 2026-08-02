@@ -1295,11 +1295,11 @@ class VOFormatterApp(_AppBase):
         self._refresh_timer = self.after(600, self._auto_refresh_preview)
 
     def _auto_refresh_preview(self) -> None:
-        """Refresh the embedded preview if it has content."""
+        """Refresh the embedded preview if it has content (never resolves pronunciation)."""
         self._refresh_timer = None
         if self._total_pages == 0:
             return
-        self._run_preview()
+        self._run_preview(resolve_pronunciation=False)
 
     # ------------------------------------------------------------------
     # Preflight-dependent toggle management
@@ -1597,7 +1597,16 @@ class VOFormatterApp(_AppBase):
                         gui_overrides,
                     )
 
-                    blocks = format_script(norm_text, preflight, file_toggles, filename)
+                    pronunciation_guide = self._resolve_pronunciation(
+                        backend_choice, api_key, preflight,
+                        file_toggles.pronunciation_guide,
+                        self._cancel_event, self._register_claude_proc,
+                    )
+
+                    blocks = format_script(
+                        norm_text, preflight, file_toggles, filename,
+                        pronunciation_guide=pronunciation_guide or None,
+                    )
                     blocks = VOFormatterApp._wrap_with_intro_outro(blocks, intro_blocks, outro_blocks)
 
                     base = os.path.splitext(filename)[0]
@@ -1843,7 +1852,42 @@ class VOFormatterApp(_AppBase):
     # Preview
     # ------------------------------------------------------------------
 
-    def _run_preview(self) -> None:
+    def _resolve_pronunciation(
+        self,
+        backend_choice: str,
+        api_key: str | None,
+        preflight_snapshot: PreflightResult | None,
+        toggle_on: bool,
+        cancel_event: threading.Event,
+        process_registry,
+    ) -> dict[str, str]:
+        """Unified pronunciation gate — single call site for preview, generate, batch.
+
+        Returns a (possibly empty) word→pronunciation dict.  Only talks to the
+        backend when *all* conditions are met; otherwise logs the skip and
+        returns {}.
+        """
+        if not toggle_on:
+            return {}
+        if preflight_snapshot is None:
+            return {}
+        if not preflight_snapshot.pronunciation_flags:
+            return {}
+        if not (backend_choice == "claude-code" or bool(api_key)):
+            log.info("Pronunciation guide skipped (no API key)")
+            return {}
+        if cancel_event.is_set():
+            return {}
+
+        words = [p.word for p in preflight_snapshot.pronunciation_flags]
+        arch_ctx = preflight_snapshot.archetype.value.replace("_", " ")
+        return run_pronunciation(
+            backend_choice, words,
+            script_context=f"{arch_ctx} script", api_key=api_key,
+            process_registry=process_registry,
+        )
+
+    def _run_preview(self, *, resolve_pronunciation: bool = True) -> None:
         if self._busy:
             return
         if not self._ensure_text_loaded():
@@ -1868,21 +1912,12 @@ class VOFormatterApp(_AppBase):
         def _worker():
             tmp_path: str | None = None
             try:
-                # Pronunciation guide (same logic as _run_generate)
-                pronunciation_guide = {}
-                can_pronounce = (
-                    toggles.pronunciation_guide
-                    and preflight_snapshot
-                    and preflight_snapshot.pronunciation_flags
-                    and (backend_choice == "claude-code" or bool(api_key))
-                )
-                if can_pronounce and not self._cancel_event.is_set():
-                    words = [p.word for p in preflight_snapshot.pronunciation_flags]
-                    arch_ctx = preflight_snapshot.archetype.value.replace("_", " ")
-                    pronunciation_guide = run_pronunciation(
-                        backend_choice, words,
-                        script_context=f"{arch_ctx} script", api_key=api_key,
-                        process_registry=self._register_claude_proc,
+                pronunciation_guide: dict[str, str] = {}
+                if resolve_pronunciation:
+                    pronunciation_guide = self._resolve_pronunciation(
+                        backend_choice, api_key, preflight_snapshot,
+                        toggles.pronunciation_guide, self._cancel_event,
+                        self._register_claude_proc,
                     )
 
                 if self._cancel_event.is_set():
@@ -1987,23 +2022,11 @@ class VOFormatterApp(_AppBase):
 
         def _worker():
             try:
-                pronunciation_guide = {}
-                if (
-                    toggles.pronunciation_guide
-                    and preflight_snapshot
-                    and preflight_snapshot.pronunciation_flags
-                    and not self._cancel_event.is_set()
-                ):
-                    if backend_choice == "claude-code" or api_key:
-                        words = [p.word for p in preflight_snapshot.pronunciation_flags]
-                        arch_ctx = preflight_snapshot.archetype.value.replace("_", " ")
-                        pronunciation_guide = run_pronunciation(
-                            backend_choice, words,
-                            script_context=f"{arch_ctx} script", api_key=api_key,
-                            process_registry=self._register_claude_proc,
-                        )
-                    else:
-                        self._post(lambda: self._log("Pronunciation guide skipped (no API key)"))
+                pronunciation_guide = self._resolve_pronunciation(
+                    backend_choice, api_key, preflight_snapshot,
+                    toggles.pronunciation_guide, self._cancel_event,
+                    self._register_claude_proc,
+                )
 
                 blocks = format_script(
                     text_snapshot,

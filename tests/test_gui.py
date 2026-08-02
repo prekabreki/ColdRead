@@ -291,3 +291,160 @@ class TestReapClaudeNoOp:
         app._reap_claude()
         mock_run.assert_not_called()
         mock_popen.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# _resolve_pronunciation — unified gate (pure-function tests, no backend calls)
+# ---------------------------------------------------------------------------
+
+import threading  # noqa: E402
+from vo_format.models import Archetype, PreflightResult, PronunciationFlag  # noqa: E402
+
+
+def _make_preflight(*, pronunciation_flags=None):
+    """Build a minimal PreflightResult with only the fields _resolve_pronunciation reads."""
+    return PreflightResult(
+        archetype=Archetype.MULTI_VOICE_DRAMA,
+        characters=[],
+        has_narrator=True,
+        source_types=[],
+        sections=[],
+        detected_stage_directions=False,
+        detected_sound_cues=False,
+        metadata_blocks=[],
+        pronunciation_flags=pronunciation_flags or [],
+        suggested_toggles={},
+        warnings=[],
+    )
+
+
+class PronunciationMockApp:
+    """Minimal app so the gate can be called as self._resolve_pronunciation(...)."""
+
+
+class TestResolvePronunciation:
+    """Test the unified pronunciation gate — never touches a real backend."""
+
+    @patch("vo_format.gui.run_pronunciation")
+    def test_toggle_off_returns_empty(self, mock_run):
+        """When pronunciation toggle is off the gate returns {} immediately."""
+        app = PronunciationMockApp()
+        result = _gui_module.VOFormatterApp._resolve_pronunciation(
+            app,
+            backend_choice="api",
+            api_key="sk-ant-fake",
+            preflight_snapshot=_make_preflight(
+                pronunciation_flags=[PronunciationFlag(word="test", line=1)]
+            ),
+            toggle_on=False,
+            cancel_event=threading.Event(),
+            process_registry=None,
+        )
+        assert result == {}
+        mock_run.assert_not_called()
+
+    @patch("vo_format.gui.run_pronunciation")
+    def test_null_preflight_returns_empty(self, mock_run):
+        app = PronunciationMockApp()
+        result = _gui_module.VOFormatterApp._resolve_pronunciation(
+            app,
+            backend_choice="api",
+            api_key="sk-ant-fake",
+            preflight_snapshot=None,
+            toggle_on=True,
+            cancel_event=threading.Event(),
+            process_registry=None,
+        )
+        assert result == {}
+        mock_run.assert_not_called()
+
+    @patch("vo_format.gui.run_pronunciation")
+    def test_no_flags_returns_empty(self, mock_run):
+        app = PronunciationMockApp()
+        result = _gui_module.VOFormatterApp._resolve_pronunciation(
+            app,
+            backend_choice="api",
+            api_key="sk-ant-fake",
+            preflight_snapshot=_make_preflight(pronunciation_flags=[]),
+            toggle_on=True,
+            cancel_event=threading.Event(),
+            process_registry=None,
+        )
+        assert result == {}
+        mock_run.assert_not_called()
+
+    @patch("vo_format.gui.run_pronunciation")
+    def test_api_backend_no_key_returns_empty(self, mock_run):
+        """api backend without a key skips and logs."""
+        app = PronunciationMockApp()
+        result = _gui_module.VOFormatterApp._resolve_pronunciation(
+            app,
+            backend_choice="api",
+            api_key=None,
+            preflight_snapshot=_make_preflight(
+                pronunciation_flags=[PronunciationFlag(word="test", line=1)]
+            ),
+            toggle_on=True,
+            cancel_event=threading.Event(),
+            process_registry=None,
+        )
+        assert result == {}
+        mock_run.assert_not_called()
+
+    @patch("vo_format.gui.run_pronunciation")
+    def test_claude_code_backend_no_key_still_calls(self, mock_run):
+        """claude-code backend does not require an api key."""
+        mock_run.return_value = {"test": "tɛst"}
+        app = PronunciationMockApp()
+        preflight = _make_preflight(
+            pronunciation_flags=[PronunciationFlag(word="test", line=1)]
+        )
+        result = _gui_module.VOFormatterApp._resolve_pronunciation(
+            app,
+            backend_choice="claude-code",
+            api_key=None,
+            preflight_snapshot=preflight,
+            toggle_on=True,
+            cancel_event=threading.Event(),
+            process_registry=None,
+        )
+        assert result == {"test": "tɛst"}
+        mock_run.assert_called_once()
+
+    @patch("vo_format.gui.run_pronunciation")
+    def test_cancel_set_returns_empty(self, mock_run):
+        app = PronunciationMockApp()
+        ev = threading.Event()
+        ev.set()
+        result = _gui_module.VOFormatterApp._resolve_pronunciation(
+            app,
+            backend_choice="api",
+            api_key="sk-ant-fake",
+            preflight_snapshot=_make_preflight(
+                pronunciation_flags=[PronunciationFlag(word="test", line=1)]
+            ),
+            toggle_on=True,
+            cancel_event=ev,
+            process_registry=None,
+        )
+        assert result == {}
+        mock_run.assert_not_called()
+
+    @patch("vo_format.gui.run_pronunciation")
+    def test_all_conditions_met_calls_backend(self, mock_run):
+        mock_run.return_value = {"hello": "həˈloʊ"}
+        app = PronunciationMockApp()
+        preflight = _make_preflight(
+            pronunciation_flags=[PronunciationFlag(word="hello", line=3)]
+        )
+        result = _gui_module.VOFormatterApp._resolve_pronunciation(
+            app,
+            backend_choice="api",
+            api_key="sk-ant-fake",
+            preflight_snapshot=preflight,
+            toggle_on=True,
+            cancel_event=threading.Event(),
+            process_registry=None,
+        )
+        assert result == {"hello": "həˈloʊ"}
+        mock_run.assert_called_once()
