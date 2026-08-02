@@ -105,13 +105,17 @@ keep-awake video are inlined — so it works with the network off.
 
 **Controls:** hold a finger on the text to freeze it, drag to reposition, lift to
 resume. A quick flick glides on and settles instead of stopping dead; putting a
-finger back down stops it where it is. The unlabelled left and right edge strips
-step the speed in words per minute. `A−`/`A+` set type size. Space, arrow keys and
+finger back down stops it where it is. The stacked `−`/`+` pair sitting just above
+the HUD at the bottom right steps the speed in words per minute; hold either one
+and it ramps rather than stepping once. `A−`/`A+` set type size. Space, arrow keys and
 Page Up/Down do the same from a keyboard, which is also how a Bluetooth foot pedal
 reaches it.
 
 The HUD shows how far through the script you are, as a percentage beside the wpm
-and as a fill along its top edge.
+and as a fill along its top edge, and how long is left at the current speed. The
+countdown comes from the same figure that drives the scroll, so it moves when you
+change the speed or the type size, and it is there while paused — "will this fit
+the time I have" is a question asked before a take, not during one.
 
 **Resume mark:** press and hold a word for half a second to mark where you
 stopped. It highlights amber, survives closing the page, and reopening the script
