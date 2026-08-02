@@ -25,6 +25,27 @@ from typing import Any
 
 log = logging.getLogger(__name__)
 
+from ._backend_shared import (
+    APIConnectionError,
+    APIResponseError,
+    DIAGNOSTIC_SYSTEM_PROMPT,
+    JSONParseError,
+    PREFLIGHT_SYSTEM_PROMPT,
+    PRONUNCIATION_SYSTEM_PROMPT,
+    PreflightError,
+    _build_diagnostic_message,
+    _build_preflight_message,
+    _build_pronunciation_message,
+    _extract_json,
+    _validate_and_build,
+)
+from .models import (
+    DiagnosticEntry,
+    DiagnosticReport,
+    FormattedBlock,
+    PreflightResult,
+)
+
 
 # ---------------------------------------------------------------------------
 # Diagnostic file log — gated behind VO_FORMAT_DEBUG.
@@ -59,24 +80,6 @@ def _dbg(msg: str) -> None:
             f.write(f"{datetime.datetime.now().isoformat(timespec='milliseconds')}  {msg}\n")
     except OSError:
         pass
-
-from .models import (
-    DiagnosticEntry,
-    DiagnosticReport,
-    FormattedBlock,
-    PreflightResult,
-)
-from .preflight import (
-    APIConnectionError,
-    APIResponseError,
-    DIAGNOSTIC_SYSTEM_PROMPT,
-    JSONParseError,
-    PREFLIGHT_SYSTEM_PROMPT,
-    PRONUNCIATION_SYSTEM_PROMPT,
-    PreflightError,
-    _extract_json,
-    _validate_and_build,
-)
 
 
 # ---------------------------------------------------------------------------
@@ -372,46 +375,13 @@ def run_preflight(
     backends without rewriting call sites. `api_key` is accepted but ignored:
     auth comes from the CLI's OAuth tokens.
     """
-    line_count = script_text.count("\n") + 1
-
-    # Same sampling strategy as the API path so behavior matches.
-    BUDGET_CHARS = 200_000
-    analysis_text = script_text
-    truncated = False
-    if len(script_text) > BUDGET_CHARS:
-        truncated = True
-        head = int(BUDGET_CHARS * 0.50)
-        mid = int(BUDGET_CHARS * 0.25)
-        tail = int(BUDGET_CHARS * 0.25)
-        middle_start = (len(script_text) - mid) // 2
-        analysis_text = (
-            f"{script_text[:head]}\n\n"
-            f"[... {len(script_text) - head - mid - tail:,} characters omitted ...]\n\n"
-            f"{script_text[middle_start:middle_start + mid]}\n\n"
-            f"[... resuming near end of script ...]\n\n"
-            f"{script_text[-tail:]}"
-        )
-
-    truncation_note = ""
-    if truncated:
-        truncation_note = (
-            f" The script is very long ({len(script_text):,} characters) and has been "
-            f"sampled (beginning, middle, end) for analysis. Line numbers are approximate."
-        )
-
-    user_message = (
-        f'Analyze the following voice-over script. The script is from a file '
-        f'named "{filename}" and is {line_count} lines long.{truncation_note}\n\n'
-        f"<script>\n{analysis_text}\n</script>"
-    )
-
+    user_message = _build_preflight_message(script_text, filename)
     response_text = _invoke_claude_cli(
         PREFLIGHT_SYSTEM_PROMPT,
         user_message,
         model=model,
         timeout=timeout,
     )
-
     data = _extract_json(response_text)
     return _validate_and_build(data)
 
@@ -431,18 +401,7 @@ def run_pronunciation(
     if not words:
         return {}
 
-    seen: set[str] = set()
-    unique_words: list[str] = []
-    for w in words:
-        if w not in seen:
-            seen.add(w)
-            unique_words.append(w)
-
-    word_list = ", ".join(unique_words)
-    user_message = (
-        f"Generate phonetic pronunciations for these words from a {script_context}:\n\n"
-        f"{word_list}"
-    )
+    user_message = _build_pronunciation_message(words, script_context)
 
     try:
         response_text = _invoke_claude_cli(
@@ -481,40 +440,8 @@ def run_diagnostic(
 
     Returns a stub report on failure (matching the API path).
     """
-    classifications: list[dict[str, Any]] = []
-    for block in formatted_blocks:
-        if block.source_line is not None:
-            classifications.append(
-                {
-                    "line": block.source_line,
-                    "type": block.block_type.value,
-                    "text_preview": block.text[:80] if block.text else "",
-                }
-            )
-
-    preflight_dict = {
-        "archetype": preflight_result.archetype.value,
-        "characters": [
-            {"name": c.name, "line_count": c.line_count}
-            for c in preflight_result.characters
-        ],
-        "has_narrator": preflight_result.has_narrator,
-        "sections": [
-            {"title": s.title, "start_line": s.start_line, "end_line": s.end_line}
-            for s in preflight_result.sections
-        ],
-        "metadata_blocks": [
-            {"type": m.type, "start_line": m.start_line, "end_line": m.end_line}
-            for m in preflight_result.metadata_blocks
-        ],
-        "warnings": preflight_result.warnings,
-    }
-
-    user_message = (
-        "Review the following formatter output for quality issues.\n\n"
-        f"PREFLIGHT ANALYSIS:\n{json.dumps(preflight_dict, indent=2)}\n\n"
-        f"FORMATTER CLASSIFICATIONS:\n{json.dumps(classifications, indent=2)}\n\n"
-        f"ORIGINAL SCRIPT:\n<script>\n{script_text}\n</script>"
+    user_message = _build_diagnostic_message(
+        script_text, preflight_result, formatted_blocks
     )
 
     def _empty_report(summary: str) -> DiagnosticReport:
