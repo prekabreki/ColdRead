@@ -344,6 +344,32 @@ class TestStructure:
         assert 'class="hdr l b"' in html
         assert "Bloodborne Ep1 - Blood Ministry</p>" in html
 
+    def test_heading_is_suppressed_when_title_has_apostrophe(self) -> None:
+        """Apostrophe in display title must match the raw PDF apostrophe."""
+        html = render(
+            _script(
+                [_line("Warcraft Episode 1 The Fall of Quel'Thalas v8", size_ratio=1.3, bold=True),
+                 _line("The king stood at the rampart.")],
+                title="Warcraft Ep1 - The Fall of Quel'Thalas",
+            )
+        )
+        assert "Warcraft Episode 1 The Fall of Quel" in html
+        assert 'class="hdr l b"' not in html               # heading suppressed
+        assert "&#x27;" in html                            # apostrophe escaped
+
+    def test_heading_is_suppressed_when_title_has_ampersand_and_angle(self) -> None:
+        """HTML metacharacters in display title must match raw PDF metacharacters."""
+        html = render(
+            _script(
+                [_line("Starsky & Hutch <Pilot>", size_ratio=1.3, bold=True),
+                 _line("It was a quiet Tuesday.")],
+                title="Starsky & Hutch <Pilot>",
+            )
+        )
+        assert 'class="hdr l b"' not in html               # heading suppressed
+        assert "&lt;Pilot&gt;" in html                     # angle bracket escaped
+        assert "Starsky &amp; Hutch" in html               # ampersand escaped
+
     def test_pdf_content_lines_are_always_present(self) -> None:
         for title in ("Kingdom Hearts Dark Road", "Something Else"):
             html = render(
