@@ -119,9 +119,9 @@ def render(
     """
     title = escape(script.title)
     display, variant = _split_variant(script.title)
+    suppress_heading = _title_matches(script.lines, display)
     display = escape(display)
     variant_suffix = f" &middot; {variant} cut" if variant else ""
-    suppress_heading = _title_matches(script.lines, display)
     heading_html = (
         f'<p class="hdr l b" style="font-size:1.4em">{display}</p>'
         if not suppress_heading
