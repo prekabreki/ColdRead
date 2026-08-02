@@ -226,9 +226,9 @@ def _xml_escape(text: str) -> str:
 
 
 # Bold: **text** -> <b>text</b>  (must be matched before italic)
-_RE_MD_BOLD = _re.compile(r"\*\*(.+?)\*\*")
+_RE_MD_BOLD = _re.compile(r"\*\*(.+?)\*\*", _re.DOTALL)
 # Italic: *text* -> <i>text</i>  (not preceded/followed by another *)
-_RE_MD_ITALIC = _re.compile(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)")
+_RE_MD_ITALIC = _re.compile(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)", _re.DOTALL)
 
 
 def _md_to_markup(escaped_text: str) -> str:

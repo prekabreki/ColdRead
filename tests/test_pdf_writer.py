@@ -20,7 +20,7 @@ from vo_format.models import (
     PreflightResult,
 )
 from vo_format.parser import extract_text, normalize_text
-from vo_format.pdf_writer import _BLOCK_STYLE_MAP, generate_pdf
+from vo_format.pdf_writer import _BLOCK_STYLE_MAP, _md_to_markup, generate_pdf
 from vo_format.toggles import resolve_toggles
 
 
@@ -120,3 +120,29 @@ class TestBlockTypeStyleCoverage:
         output_path = os.path.join(tmp_path, "all_block_types.pdf")
         generate_pdf(blocks=blocks, output_path=output_path, toggles=toggles)
         _assert_valid_pdf(output_path, label="all-block-types")
+
+
+class TestMdToMarkup:
+    def test_bold_with_newline(self) -> None:
+        result = _md_to_markup("**Last Episode: The Seven\nLights and Thirteen Darknesses**")
+        assert result == "<b>Last Episode: The Seven\nLights and Thirteen Darknesses</b>"
+
+    def test_italic_with_newline(self) -> None:
+        result = _md_to_markup("*whispering very softly\ninto the microphone*")
+        assert result == "<i>whispering very softly\ninto the microphone</i>"
+
+    def test_bold_before_italic_precedence(self) -> None:
+        result = _md_to_markup("**bold** then *italic*")
+        assert result == "<b>bold</b> then <i>italic</i>"
+
+    def test_two_separate_italic_spans_with_newlines(self) -> None:
+        result = _md_to_markup("*first italic\nspan* normal *second italic\nspan*")
+        assert result == "<i>first italic\nspan</i> normal <i>second italic\nspan</i>"
+
+    def test_single_line_bold_unchanged(self) -> None:
+        result = _md_to_markup("**Prologue**")
+        assert result == "<b>Prologue</b>"
+
+    def test_stray_single_asterisk_no_runaway(self) -> None:
+        result = _md_to_markup("not *emphasis but a\nsingle lonely asterisk")
+        assert result == "not *emphasis but a\nsingle lonely asterisk"
