@@ -288,7 +288,7 @@ class TestLength:
         assert "<span>2026-01-09</span>" in html
         assert "words" not in html
         # And the row is still reachable, which is the whole point of degrading.
-        assert "<b>Thing - formatted</b>" in html
+        assert "<b>Thing</b>" in html
 
     def test_a_zero_count_is_shown_rather_than_treated_as_missing(self):
         # 0 is falsy. A read-view that really did extract no words should say so,
@@ -548,19 +548,28 @@ class TestMain:
         # blank.
         assert "<b>loose-script</b>" in html
 
-    @pytest.mark.parametrize("variant", ["formatted", "batched"])
-    def test_variant_survives_into_the_title(self, tmp_path: Path, variant: str):
-        (tmp_path / f"CassetteLore — A v1 - {variant} - readview.html").write_text("x")
+    def test_formatted_variant_is_suppressed_in_display_title(
+        self, tmp_path: Path
+    ):
+        (tmp_path / "CassetteLore — A v1 - formatted - readview.html").write_text("x")
         main(str(tmp_path))
         html = (tmp_path / "index.html").read_text(encoding="utf-8")
-        assert variant in html
+        assert "<b>A v1</b>" in html
+        # Still present in data-key and href so read state survives.
+        assert 'data-key="CassetteLore — A v1 - formatted - readview.html"' in html
+
+    def test_batched_variant_is_kept_in_display_title(self, tmp_path: Path):
+        (tmp_path / "CassetteLore — A v1 - batched - readview.html").write_text("x")
+        main(str(tmp_path))
+        html = (tmp_path / "index.html").read_text(encoding="utf-8")
+        assert "<b>A v1 - batched</b>" in html
 
     def test_readview_suffix_is_stripped_from_the_display_title(self, tmp_path: Path):
         (tmp_path / "CassetteLore — A v1 - formatted - readview.html").write_text("x")
         main(str(tmp_path))
         html = (tmp_path / "index.html").read_text(encoding="utf-8")
         assert "readview.html</b>" not in html
-        assert "<b>A v1 - formatted</b>" in html
+        assert "<b>A v1</b>" in html
 
     def test_the_config_is_read_from_the_directory_being_indexed(self, tmp_path: Path):
         (tmp_path / "CassetteLore — A v1 - formatted - readview.html").write_text("x")
@@ -574,7 +583,7 @@ class TestMain:
         (tmp_path / "channels.json").write_text("{oops", encoding="utf-8")
         main(str(tmp_path))
         html = (tmp_path / "index.html").read_text(encoding="utf-8")
-        assert "<b>A v1 - formatted</b>" in html
+        assert "<b>A v1</b>" in html
         assert 'data-channel="CassetteLore"' in html
 
     def test_the_config_is_not_mistaken_for_a_read_view(self, tmp_path: Path):
@@ -593,6 +602,25 @@ class TestMain:
             encoding="utf-8"
         )
 
+    def test_data_key_stays_full_filename_when_formatted_stripped(
+        self, tmp_path: Path
+    ):
+        (tmp_path / "CassetteLore — A v1 - formatted - readview.html").write_text("x")
+        main(str(tmp_path))
+        html = (tmp_path / "index.html").read_text(encoding="utf-8")
+        assert "<b>A v1</b>" in html
+        assert (
+            'data-key="CassetteLore — A v1 - formatted - readview.html"' in html
+        )
+
+    def test_mid_title_formatted_word_is_left_alone(self, tmp_path: Path):
+        (tmp_path / "CassetteLore — The formatted file v1 - readview.html").write_text(
+            "x"
+        )
+        main(str(tmp_path))
+        html = (tmp_path / "index.html").read_text(encoding="utf-8")
+        assert "<b>The formatted file v1</b>" in html
+
 
 class TestLengthEndToEnd:
     def test_main_shows_the_count_from_the_files_on_disk(self, tmp_path: Path):
@@ -606,5 +634,5 @@ class TestLengthEndToEnd:
         html = (tmp_path / "index.html").read_text(encoding="utf-8")
         assert "2,500 words" in html
         # The countless one still gets a row rather than disappearing.
-        assert "<b>B v1 - formatted</b>" in html
+        assert "<b>B v1</b>" in html
         assert html.count("words") == 1
