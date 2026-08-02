@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from unittest.mock import patch
 
 import pytest
 
@@ -261,7 +262,32 @@ class TestWrapWithIntroOutro:
 
 
 # ---------------------------------------------------------------------------
-# toggles_to_dict round-trip via _collect_toggles is not feasible without
-# a live Tk root (StringVar / DoubleVar instances). The underlying
-# toggles_to_dict is already covered in test_presets.py.
+# _reap_claude — no-op when no process is tracked
 # ---------------------------------------------------------------------------
+
+
+class MockApp:
+    """Minimal stand-in for VOFormatterApp so we can test _reap_claude
+    without a Tk root or live subprocess."""
+
+    def __init__(self, claude_proc=None):
+        self._claude_proc = claude_proc
+
+    def _reap_claude(self):
+        _gui_module.VOFormatterApp._reap_claude(self)
+
+
+class TestReapClaudeNoOp:
+    """_reap_claude must be a no-op when no Claude child is tracked."""
+
+    def test_no_tracked_process_does_nothing(self):
+        app = MockApp()
+        app._reap_claude()  # must not raise
+
+    @patch("subprocess.run")
+    @patch("subprocess.Popen")
+    def test_no_tracked_process_spawns_nothing(self, mock_popen, mock_run):
+        app = MockApp()
+        app._reap_claude()
+        mock_run.assert_not_called()
+        mock_popen.assert_not_called()

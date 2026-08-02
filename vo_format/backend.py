@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
+from collections.abc import Callable
 from typing import Literal, Protocol
 
 from ._backend_shared import DEFAULT_API_MODEL
@@ -41,6 +43,8 @@ class Backend(Protocol):
         filename: str,
         api_key: str | None = None,
         model: str | None = None,
+        *,
+        process_registry: Callable[[subprocess.Popen[str] | None], None] | None = None,
     ) -> PreflightResult: ...
 
     def run_pronunciation(
@@ -49,6 +53,8 @@ class Backend(Protocol):
         script_context: str,
         api_key: str | None = None,
         model: str | None = None,
+        *,
+        process_registry: Callable[[subprocess.Popen[str] | None], None] | None = None,
     ) -> dict[str, str]: ...
 
     def run_diagnostic(
@@ -58,6 +64,8 @@ class Backend(Protocol):
         formatted_blocks: list[FormattedBlock],
         api_key: str | None = None,
         model: str | None = None,
+        *,
+        process_registry: Callable[[subprocess.Popen[str] | None], None] | None = None,
     ) -> DiagnosticReport: ...
 
 
@@ -70,6 +78,8 @@ class _APIBackendImpl:
         filename: str,
         api_key: str | None = None,
         model: str | None = None,
+        *,
+        process_registry: Callable[[subprocess.Popen[str] | None], None] | None = None,
     ) -> PreflightResult:
         return _api.run_preflight(
             script_text, filename, api_key=api_key,
@@ -82,6 +92,8 @@ class _APIBackendImpl:
         script_context: str,
         api_key: str | None = None,
         model: str | None = None,
+        *,
+        process_registry: Callable[[subprocess.Popen[str] | None], None] | None = None,
     ) -> dict[str, str]:
         return _api.run_pronunciation(
             words, script_context, api_key=api_key,
@@ -95,6 +107,8 @@ class _APIBackendImpl:
         formatted_blocks: list[FormattedBlock],
         api_key: str | None = None,
         model: str | None = None,
+        *,
+        process_registry: Callable[[subprocess.Popen[str] | None], None] | None = None,
     ) -> DiagnosticReport:
         return _api.run_diagnostic(
             script_text, preflight_result, formatted_blocks,
@@ -112,9 +126,12 @@ class _ClaudeCodeBackendImpl:
         filename: str,
         api_key: str | None = None,
         model: str | None = None,
+        *,
+        process_registry: Callable[[subprocess.Popen[str] | None], None] | None = None,
     ) -> PreflightResult:
         return _cli.run_preflight(
             script_text, filename, api_key=api_key, model=model,
+            process_registry=process_registry,
         )
 
     def run_pronunciation(
@@ -123,9 +140,12 @@ class _ClaudeCodeBackendImpl:
         script_context: str,
         api_key: str | None = None,
         model: str | None = None,
+        *,
+        process_registry: Callable[[subprocess.Popen[str] | None], None] | None = None,
     ) -> dict[str, str]:
         return _cli.run_pronunciation(
             words, script_context, api_key=api_key, model=model,
+            process_registry=process_registry,
         )
 
     def run_diagnostic(
@@ -135,10 +155,13 @@ class _ClaudeCodeBackendImpl:
         formatted_blocks: list[FormattedBlock],
         api_key: str | None = None,
         model: str | None = None,
+        *,
+        process_registry: Callable[[subprocess.Popen[str] | None], None] | None = None,
     ) -> DiagnosticReport:
         return _cli.run_diagnostic(
             script_text, preflight_result, formatted_blocks,
             api_key=api_key, model=model,
+            process_registry=process_registry,
         )
 
 
@@ -184,10 +207,15 @@ def run_preflight(
     filename: str,
     api_key: str | None = None,
     model: str | None = None,
+    *,
+    process_registry: Callable[[subprocess.Popen[str] | None], None] | None = None,
 ) -> PreflightResult:
     chosen = resolve_backend(backend)
     impl = get_backend(chosen)
-    return impl.run_preflight(script_text, filename, api_key=api_key, model=model)
+    return impl.run_preflight(
+        script_text, filename, api_key=api_key, model=model,
+        process_registry=process_registry,
+    )
 
 
 def run_pronunciation(
@@ -196,10 +224,15 @@ def run_pronunciation(
     script_context: str,
     api_key: str | None = None,
     model: str | None = None,
+    *,
+    process_registry: Callable[[subprocess.Popen[str] | None], None] | None = None,
 ) -> dict[str, str]:
     chosen = resolve_backend(backend)
     impl = get_backend(chosen)
-    return impl.run_pronunciation(words, script_context, api_key=api_key, model=model)
+    return impl.run_pronunciation(
+        words, script_context, api_key=api_key, model=model,
+        process_registry=process_registry,
+    )
 
 
 def run_diagnostic(
@@ -209,10 +242,13 @@ def run_diagnostic(
     formatted_blocks: list[FormattedBlock],
     api_key: str | None = None,
     model: str | None = None,
+    *,
+    process_registry: Callable[[subprocess.Popen[str] | None], None] | None = None,
 ) -> DiagnosticReport:
     chosen = resolve_backend(backend)
     impl = get_backend(chosen)
     return impl.run_diagnostic(
         script_text, preflight_result, formatted_blocks,
         api_key=api_key, model=model,
+        process_registry=process_registry,
     )
