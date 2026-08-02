@@ -129,6 +129,73 @@ draft starts clean, since the mark is stored against the filename's version.
 Re-running skips any page whose HTML is already strictly newer than its PDF;
 pass `--force` to re-render anyway.
 
+### The library
+
+One read-view per PDF is enough for one script. For a session's worth of them —
+and for a tablet that won't open a local file — there has to be something to
+navigate between them.
+
+That something is a directory of read-views plus a generated `index.html`, served
+over HTTP by whatever you like. In practice it means a Raspberry Pi on a shelf
+somewhere, quietly serving a handful of scripts to a tablet. It is an odd little
+thing to have built, which is why this half is optional and off by default. It's
+documented because it works well, in case anyone else wants one.
+
+```bash
+python vo_format/readview/library.py /path/to/directory
+# writes /path/to/directory/index.html
+```
+
+The index lists every `.html` in that directory except `index.html` itself. Each
+row shows the title, the word count, and the date the read-view was derived — the
+length because "does this fit the time I have" is what the page gets asked, and
+the date because the directory holds copies, so a stale one should be visible
+rather than worked out.
+
+Scripts group into collapsible sections by the `Channel — Title` prefix on the
+filename. A file without one still gets a row, filed under `Unfiled` — nothing is
+dropped from the only navigation a tablet has. Sections start closed and remember
+being opened. To give a channel a display name, or pin the order they appear in,
+drop a `channels.json` beside the read-views:
+
+```json
+{ "order": ["Fiction", "Interviews"],
+  "labels": { "Fiction": "The Fiction Channel" } }
+```
+
+Channels missing from `order` follow alphabetically and show their prefix as-is.
+
+**Marking scripts done:** swipe a row left past about 60px, or tap its `✓` if
+there's no touchscreen. The row dims, its `✓` lights up, and it drops to the
+bottom of its section, with a tally on the section's summary line. Swipe or tap
+again to undo. Read state is keyed on the filename, which carries the draft
+version, so publishing a new draft brings a script back unread rather than
+inheriting a tick it didn't earn. The `⟳` top right refetches the page.
+
+`coldread-readview --library index.html` adds a `← Library` button to the
+read-view's HUD, pointing back at that index. Off by default: a read-view
+converted on its own has no library to return to, and a dead button is worse than
+no button.
+
+The generator imports nothing outside the standard library and nothing from
+ColdRead, so it can run on the serving box without installing anything there:
+
+```bash
+ssh box "python3 - /path/to/directory" < vo_format/readview/library.py
+```
+
+That is the invocation it's built for. Generating the index where the files
+actually are matters if you ever publish one channel at a time — an index built
+somewhere else would quietly omit whatever that run didn't stage.
+
+**Two things the pages need from however you serve them.** They want **HTTPS**,
+because keeping a tablet awake needs `navigator.wakeLock` and browsers only
+expose that in a secure context; over plain HTTP an iPad dimmed and slept inside
+two minutes, mid-read. And they want a **real origin**, because Safari blocks
+`localStorage` on `file://`, which is where the speed, type size, scroll position
+and resume mark are kept. Any static HTTP server will do for both. If the box has
+no public DNS name to get a certificate for, Tailscale is one way to give it one.
+
 **Shared read state (optional):** resume marks, which scripts are finished, and
 the per-script speed live in the browser's local storage, which means they live
 in one browser. `coldread-state` is a small service that keeps them in a single
@@ -154,9 +221,7 @@ is what carries the token cookie with it and lets the service turn away a reques
 that came from somewhere else. It binds `127.0.0.1` by default for the same
 reason: the proxy is meant to be the only thing that reaches it. The token is
 generated on first run into `--token-file`, and loading `/state?k=<token>` once
-sets the cookie the pages use from then on. Those pages want a real HTTPS origin
-regardless of the state service; if the box has no public DNS name, something
-like Tailscale is one way to get it a certificate.
+sets the cookie the pages use from then on.
 
 ## How it works
 
