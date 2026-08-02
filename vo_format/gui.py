@@ -6,6 +6,7 @@ import dataclasses
 import logging
 import os
 import subprocess
+import sys
 import tempfile
 import threading
 import tkinter as tk
@@ -135,6 +136,7 @@ class VOFormatterApp(_AppBase):
         self._busy = False
         self._closing = False
         self._cancel_event = threading.Event()
+        self._claude_proc: subprocess.Popen | None = None
         self._refresh_timer: str | None = None
         self._status_timer: str | None = None
         self._has_preflight_data = False
@@ -232,24 +234,47 @@ class VOFormatterApp(_AppBase):
         self.destroy()
 
     def _reap_claude(self) -> None:
-        import sys
-        if sys.platform == "win32":
+        """Terminate the tracked Claude subprocess, then kill if it hangs.
+
+        Safe no-op when no process is tracked.  Kills only this app's child,
+        never a name/pattern-based broad sweep.
+        """
+        import signal as _signal
+        proc = self._claude_proc
+        if proc is None:
+            return
+        try:
+            if sys.platform == "win32":
+                proc.terminate()
+            else:
+                os.killpg(os.getpgid(proc.pid), _signal.SIGTERM)
+        except (ProcessLookupError, OSError):
+            return
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
             try:
-                subprocess.run(
-                    ["taskkill", "/F", "/IM", "claude.exe"],
-                    capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW,
-                    timeout=5,
-                )
-            except (OSError, subprocess.TimeoutExpired):
+                if sys.platform == "win32":
+                    proc.kill()
+                else:
+                    os.killpg(os.getpgid(proc.pid), _signal.SIGKILL)
+            except (ProcessLookupError, OSError):
                 pass
-        else:
             try:
-                subprocess.run(
-                    ["pkill", "-f", "claude"],
-                    capture_output=True, timeout=5,
-                )
-            except (OSError, subprocess.TimeoutExpired):
+                proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
                 pass
+        self._claude_proc = None
+
+    def _register_claude_proc(self, proc: subprocess.Popen | None) -> None:
+        """Store or clear the tracked Claude child process.
+
+        Called by the backend when it spawns a subprocess (``proc`` is the
+        live ``Popen``) and again when the process exits (``proc`` is
+        ``None``).  Thread-safe by ref-assignment; ``_reap_claude``
+        snapshots so a concurrent clear mid-reap is harmless.
+        """
+        self._claude_proc = proc
 
     def _on_cancel(self) -> None:
         self._cancel_event.set()
@@ -1537,6 +1562,7 @@ class VOFormatterApp(_AppBase):
                             try:
                                 preflight = run_preflight(
                                     backend_choice, norm_text, filename, api_key=api_key,
+                                    process_registry=self._register_claude_proc,
                                 )
                                 self._preflight_cache.put(text_hash, preflight)
                                 arch = preflight.archetype.value
@@ -1681,6 +1707,7 @@ class VOFormatterApp(_AppBase):
                     text_snapshot,
                     filename_snapshot,
                     api_key=api_key,
+                    process_registry=self._register_claude_proc,
                 )
                 self._post(lambda: self._on_preflight_done(result, source_text=text_snapshot))
             except PreflightError as e:
@@ -1855,6 +1882,7 @@ class VOFormatterApp(_AppBase):
                     pronunciation_guide = run_pronunciation(
                         backend_choice, words,
                         script_context=f"{arch_ctx} script", api_key=api_key,
+                        process_registry=self._register_claude_proc,
                     )
 
                 if self._cancel_event.is_set():
@@ -1972,6 +2000,7 @@ class VOFormatterApp(_AppBase):
                         pronunciation_guide = run_pronunciation(
                             backend_choice, words,
                             script_context=f"{arch_ctx} script", api_key=api_key,
+                            process_registry=self._register_claude_proc,
                         )
                     else:
                         self._post(lambda: self._log("Pronunciation guide skipped (no API key)"))

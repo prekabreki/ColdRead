@@ -21,6 +21,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections.abc import Callable
 from typing import Any
 
 log = logging.getLogger(__name__)
@@ -146,23 +147,15 @@ def _build_subprocess_env() -> dict[str, str]:
 
 
 def _subprocess_creationflags() -> int:
-    """Windows-only flag that prevents a console window for the subprocess.
+    """Windows-only flags: no console popup + isolated process group.
 
-    DETACHED_PROCESS can additionally stop Node.js grandchildren from
-    inheriting the parent's console handle when the CLI is run with
-    active tool calls (--permission-mode acceptEdits produces real
-    child I/O). For our use
-    case we pass `--tools ""` — no tool calls, no chatty grandchildren
-    — and DETACHED_PROCESS turned out to break the stdin pipe on
-    Windows (the subprocess hangs waiting for input that never lands).
-    CREATE_NO_WINDOW alone hides the popup terminal without disturbing
-    Python's stdin PIPE.
-
-    Returns 0 on non-Windows platforms; the flag constants are Windows-only.
+    CREATE_NEW_PROCESS_GROUP lets the GUI's `_reap_claude` target the
+    child's process group via `Popen.kill()` so `claude`'s own children
+    get reaped too, without resorting to name-based killing.
     """
     if sys.platform != "win32":
         return 0
-    return subprocess.CREATE_NO_WINDOW
+    return subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
 
 
 def _invoke_claude_cli(
@@ -171,11 +164,16 @@ def _invoke_claude_cli(
     *,
     model: str | None = None,
     timeout: int = DEFAULT_TIMEOUT_SEC,
+    process_registry: Callable[[subprocess.Popen[str] | None], None] | None = None,
 ) -> str:
     """Run the Claude CLI in --print mode and return the assistant's text.
 
     Raises APIConnectionError / APIResponseError / JSONParseError to match the
     shape of the API backend.
+
+    If *process_registry* is provided, it is called with the live
+    ``Popen`` object just after spawn (so the caller can terminate it)
+    and again with ``None`` when the process exits.
     """
     claude_bin = _resolve_claude_cli()
     chosen_model = model or os.environ.get("VO_FORMAT_CLAUDE_CODE_MODEL") or DEFAULT_MODEL
@@ -270,36 +268,55 @@ def _invoke_claude_cli(
 
         _dbg(f"  -> subprocess.run starting at {datetime.datetime.now().isoformat(timespec='milliseconds')}")
         t0 = time.monotonic()
-        try:
-            proc = subprocess.run(
-                cmd,
-                stdin=subprocess.DEVNULL,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=timeout,
-                check=False,
-                cwd=scratch,
-                env=env,
-                creationflags=creation_flags,
-            )
-        except subprocess.TimeoutExpired as e:
-            _dbg(f"  !! TimeoutExpired after {time.monotonic() - t0:.1f}s")
-            raise APIConnectionError(
-                f"Claude CLI timed out after {timeout}s"
-            ) from e
-        except OSError as e:
-            _dbg(f"  !! OSError: {e!r}")
-            raise APIConnectionError(f"Failed to launch Claude CLI: {e}") from e
-        elapsed = time.monotonic() - t0
-        _dbg(f"  <- subprocess.run returned in {elapsed:.1f}s  rc={proc.returncode}")
-        _dbg(f"     stdout_len={len(proc.stdout or '')}  stderr_len={len(proc.stderr or '')}")
-        if proc.stderr:
-            _dbg(f"     stderr_tail={(proc.stderr or '').strip()[-400:]!r}")
 
-    stdout = (proc.stdout or "").strip()
-    stderr_tail = (proc.stderr or "").strip()[-500:]
+        # Start the process so the caller can terminate it mid-flight.
+        popen_kwargs: dict[str, Any] = dict(
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            cwd=scratch,
+            env=env,
+            creationflags=creation_flags,
+        )
+        if sys.platform != "win32":
+            popen_kwargs["start_new_session"] = True
+        popen = subprocess.Popen(cmd, **popen_kwargs)
+        if process_registry:
+            try:
+                process_registry(popen)
+            except Exception:
+                pass
+
+        try:
+            try:
+                stdout, stderr_text = popen.communicate(timeout=timeout)
+                elapsed = time.monotonic() - t0
+                _dbg(f"  <- subprocess communicated in {elapsed:.1f}s  rc={popen.returncode}")
+                _dbg(f"     stdout_len={len(stdout or '')}  stderr_len={len(stderr_text or '')}")
+                if stderr_text:
+                    _dbg(f"     stderr_tail={stderr_text.strip()[-400:]!r}")
+            except subprocess.TimeoutExpired as e:
+                _dbg(f"  !! TimeoutExpired after {time.monotonic() - t0:.1f}s")
+                popen.kill()
+                stdout, stderr_text = popen.communicate()
+                raise APIConnectionError(
+                    f"Claude CLI timed out after {timeout}s"
+                ) from e
+            except OSError as e:
+                _dbg(f"  !! OSError: {e!r}")
+                raise APIConnectionError(f"Failed to launch Claude CLI: {e}") from e
+        finally:
+            if process_registry:
+                try:
+                    process_registry(None)
+                except Exception:
+                    pass
+
+    stdout = (stdout or "").strip()
+    stderr_tail = (stderr_text or "").strip()[-500:]
 
     # Parse the wrapper first so we can surface structured errors (the CLI
     # emits the envelope on stdout even when API calls fail; stderr is
@@ -313,7 +330,7 @@ def _invoke_claude_cli(
         except json.JSONDecodeError:
             wrapper = None
 
-    if proc.returncode != 0:
+    if popen.returncode != 0:
         # API errors (credit exhaustion, rate
         # limits, validation failures) come back as the JSON envelope with
         # is_error=true. The useful message lives in envelope["result"]
@@ -325,7 +342,7 @@ def _invoke_claude_cli(
             status_part = f" (api_error_status={api_status})" if api_status else ""
             raise APIResponseError(f"Claude CLI error: {msg}{status_part}")
         raise APIResponseError(
-            f"Claude CLI exited {proc.returncode}: {stderr_tail or '<no stderr>'}"
+            f"Claude CLI exited {popen.returncode}: {stderr_tail or '<no stderr>'}"
         )
 
     if not stdout:
@@ -365,6 +382,7 @@ def run_preflight(
     model: str | None = None,
     *,
     timeout: int = DEFAULT_TIMEOUT_SEC,
+    process_registry: Callable[[subprocess.Popen[str] | None], None] | None = None,
 ) -> PreflightResult:
     """Run preflight analysis via the Claude Code CLI.
 
@@ -410,6 +428,7 @@ def run_preflight(
         user_message,
         model=model,
         timeout=timeout,
+        process_registry=process_registry,
     )
 
     data = _extract_json(response_text)
@@ -423,6 +442,7 @@ def run_pronunciation(
     model: str | None = None,
     *,
     timeout: int = DEFAULT_TIMEOUT_SEC,
+    process_registry: Callable[[subprocess.Popen[str] | None], None] | None = None,
 ) -> dict[str, str]:
     """Generate phonetic spellings via the Claude Code CLI.
 
@@ -450,6 +470,7 @@ def run_pronunciation(
             user_message,
             model=model,
             timeout=timeout,
+            process_registry=process_registry,
         )
     except PreflightError as e:
         log.warning("Pronunciation guide via Claude Code CLI failed: %s", e)
@@ -476,6 +497,7 @@ def run_diagnostic(
     model: str | None = None,
     *,
     timeout: int = DEFAULT_TIMEOUT_SEC,
+    process_registry: Callable[[subprocess.Popen[str] | None], None] | None = None,
 ) -> DiagnosticReport:
     """Run a diagnostic review via the Claude Code CLI.
 
@@ -534,6 +556,7 @@ def run_diagnostic(
             user_message,
             model=model,
             timeout=timeout,
+            process_registry=process_registry,
         )
     except PreflightError as e:
         return _empty_report(f"Diagnostic CLI call failed: {e}")

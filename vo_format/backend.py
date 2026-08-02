@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
+from collections.abc import Callable
 from typing import Literal
 
 from .models import DiagnosticReport, FormattedBlock, PreflightResult
@@ -61,10 +63,15 @@ def run_preflight(
     filename: str,
     api_key: str | None = None,
     model: str | None = None,
+    *,
+    process_registry: Callable[[subprocess.Popen[str] | None], None] | None = None,
 ) -> PreflightResult:
     chosen = resolve_backend(backend)
     if chosen == "claude-code":
-        return _cli.run_preflight(script_text, filename, api_key=api_key, model=model)
+        return _cli.run_preflight(
+            script_text, filename, api_key=api_key, model=model,
+            process_registry=process_registry,
+        )
     return _api.run_preflight(
         script_text,
         filename,
@@ -79,10 +86,15 @@ def run_pronunciation(
     script_context: str,
     api_key: str | None = None,
     model: str | None = None,
+    *,
+    process_registry: Callable[[subprocess.Popen[str] | None], None] | None = None,
 ) -> dict[str, str]:
     chosen = resolve_backend(backend)
     if chosen == "claude-code":
-        return _cli.run_pronunciation(words, script_context, api_key=api_key, model=model)
+        return _cli.run_pronunciation(
+            words, script_context, api_key=api_key, model=model,
+            process_registry=process_registry,
+        )
     return _api.run_pronunciation(
         words,
         script_context,
@@ -98,11 +110,14 @@ def run_diagnostic(
     formatted_blocks: list[FormattedBlock],
     api_key: str | None = None,
     model: str | None = None,
+    *,
+    process_registry: Callable[[subprocess.Popen[str] | None], None] | None = None,
 ) -> DiagnosticReport:
     chosen = resolve_backend(backend)
     if chosen == "claude-code":
         return _cli.run_diagnostic(
-            script_text, preflight_result, formatted_blocks, api_key=api_key, model=model
+            script_text, preflight_result, formatted_blocks, api_key=api_key, model=model,
+            process_registry=process_registry,
         )
     return _api.run_diagnostic(
         script_text,
