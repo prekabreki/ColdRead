@@ -39,13 +39,6 @@ class MarginPreset(str, Enum):
     NARROW = "narrow"
 
 
-# Canonical leftIndent for the block types that go through cold-read line
-# wrapping. Units are multiples of 0.5" (one "indent step"). pdf_writer.py
-# uses this to set ParagraphStyle.leftIndent; cold_read.py uses it to compute
-# max line width. Keep them in lockstep by not hardcoding either value.
-WRAPPABLE_INDENT_UNITS: dict["BlockType", int] = {}  # populated below
-
-
 class BlockType(str, Enum):
     TITLE_PAGE_TITLE = "title_page_title"
     TITLE_PAGE_INFO = "title_page_info"
@@ -68,13 +61,16 @@ class BlockType(str, Enum):
     INTRO = "intro"
     OUTRO = "outro"
 
-
-WRAPPABLE_INDENT_UNITS.update({
+# Canonical leftIndent for the block types that go through cold-read line
+# wrapping. Units are multiples of 0.5" (one "indent step"). pdf_writer.py
+# uses this to set ParagraphStyle.leftIndent; cold_read.py uses it to compute
+# max line width. Keep them in lockstep by not hardcoding either value.
+WRAPPABLE_INDENT_UNITS: dict["BlockType", int] = {
     BlockType.DIALOGUE:    1,
     BlockType.NARRATION:   1,
     BlockType.QUOTED_TEXT: 2,
     BlockType.PROSE:       0,
-})
+}
 
 
 class LineType(str, Enum):
@@ -171,6 +167,16 @@ class FormatToggles:
     font_size: int = 16
     line_spacing: float = 2.0
     margins: MarginPreset = MarginPreset.WIDE
+
+    def __post_init__(self):
+        if self.font_size not in {12, 14, 16, 18}:
+            raise ValueError(
+                f"font_size must be one of {{12, 14, 16, 18}}; got {self.font_size!r}"
+            )
+        if self.line_spacing <= 0:
+            raise ValueError(
+                f"line_spacing must be > 0; got {self.line_spacing!r}"
+            )
 
 
 # ---------------------------------------------------------------------------
