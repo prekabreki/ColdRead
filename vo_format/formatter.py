@@ -800,9 +800,6 @@ def _format_document_archive(
     containers around detected source label boundaries. Interior content is
     classified as narration, sound cues, or stage directions.
     """
-    if not toggles.source_labels:
-        return _format_single_narrator(numbered_lines, preflight, toggles, color_map)
-
     blocks: list[FormattedBlock] = []
     source_patterns = _compile_source_patterns(preflight.source_types)
     in_source_block = False
@@ -838,11 +835,12 @@ def _format_document_archive(
         m = RE_SECTION_HEADER.match(line)
         if m:
             if in_source_block:
-                blocks.append(FormattedBlock(
-                    block_type=BlockType.SOURCE_LABEL_CLOSE,
-                    text="",
-                    source_line=line_num,
-                ))
+                if toggles.source_labels:
+                    blocks.append(FormattedBlock(
+                        block_type=BlockType.SOURCE_LABEL_CLOSE,
+                        text="",
+                        source_line=line_num,
+                    ))
                 in_source_block = False
             title = m.group(1).strip()
             if title.startswith("[") and title.endswith("]"):
@@ -871,31 +869,35 @@ def _format_document_archive(
         if doc_ref_m:
             # Close previous source block if it was a doc ref
             if in_source_block:
+                if toggles.source_labels:
+                    blocks.append(FormattedBlock(
+                        block_type=BlockType.SOURCE_LABEL_CLOSE,
+                        text="",
+                        source_line=line_num,
+                    ))
+                in_source_block = False
+            if toggles.source_labels:
                 blocks.append(FormattedBlock(
-                    block_type=BlockType.SOURCE_LABEL_CLOSE,
-                    text="",
+                    block_type=BlockType.SOURCE_LABEL_OPEN,
+                    text=f"Document Reference: {doc_ref_m.group(1).strip()}",
+                    source_type="document_ref",
+                    bold=True,
+                    is_centered=True,
                     source_line=line_num,
+                    match_pattern="RE_DOC_REF",
                 ))
-            blocks.append(FormattedBlock(
-                block_type=BlockType.SOURCE_LABEL_OPEN,
-                text=f"Document Reference: {doc_ref_m.group(1).strip()}",
-                source_type="document_ref",
-                bold=True,
-                is_centered=True,
-                source_line=line_num,
-                match_pattern="RE_DOC_REF",
-            ))
             in_source_block = True
             continue
 
         # Document Archive Section header (major section divider)
         if match_result and match_result[0] == "document_section":
             if in_source_block:
-                blocks.append(FormattedBlock(
-                    block_type=BlockType.SOURCE_LABEL_CLOSE,
-                    text="",
-                    source_line=line_num,
-                ))
+                if toggles.source_labels:
+                    blocks.append(FormattedBlock(
+                        block_type=BlockType.SOURCE_LABEL_CLOSE,
+                        text="",
+                        source_line=line_num,
+                    ))
                 in_source_block = False
             source_type, label = match_result
             block = FormattedBlock(
@@ -918,11 +920,12 @@ def _format_document_archive(
         # Narrative label (Opening/Closing Narrative)
         if match_result and match_result[0] == "narrative_label":
             if in_source_block:
-                blocks.append(FormattedBlock(
-                    block_type=BlockType.SOURCE_LABEL_CLOSE,
-                    text="",
-                    source_line=line_num,
-                ))
+                if toggles.source_labels:
+                    blocks.append(FormattedBlock(
+                        block_type=BlockType.SOURCE_LABEL_CLOSE,
+                        text="",
+                        source_line=line_num,
+                    ))
                 in_source_block = False
             _, label = match_result
             block = FormattedBlock(
@@ -943,21 +946,24 @@ def _format_document_archive(
         # Other source label match (if not already handled above)
         if match_result and match_result[0] not in ("document_section", "narrative_label"):
             if in_source_block:
-                blocks.append(FormattedBlock(
-                    block_type=BlockType.SOURCE_LABEL_CLOSE,
-                    text="",
-                    source_line=line_num,
-                ))
+                if toggles.source_labels:
+                    blocks.append(FormattedBlock(
+                        block_type=BlockType.SOURCE_LABEL_CLOSE,
+                        text="",
+                        source_line=line_num,
+                    ))
+                in_source_block = False
             source_type, label = match_result
-            blocks.append(FormattedBlock(
-                block_type=BlockType.SOURCE_LABEL_OPEN,
-                text=label,
-                source_type=source_type,
-                bold=True,
-                is_centered=True,
-                source_line=line_num,
-                match_pattern="RE_SOURCE_LABEL",
-            ))
+            if toggles.source_labels:
+                blocks.append(FormattedBlock(
+                    block_type=BlockType.SOURCE_LABEL_OPEN,
+                    text=label,
+                    source_type=source_type,
+                    bold=True,
+                    is_centered=True,
+                    source_line=line_num,
+                    match_pattern="RE_SOURCE_LABEL",
+                ))
             in_source_block = True
             continue
 
@@ -1052,7 +1058,7 @@ def _format_document_archive(
             blocks.append(block)
 
     # Close any open source block
-    if in_source_block:
+    if in_source_block and toggles.source_labels:
         blocks.append(FormattedBlock(
             block_type=BlockType.SOURCE_LABEL_CLOSE,
             text="",
@@ -1073,9 +1079,6 @@ def _format_mixed_media(
     containers. Interior content uses multi-voice classification (character
     names with colors, dialogue, stage directions).
     """
-    if not toggles.source_labels:
-        return _format_multi_voice_drama(numbered_lines, preflight, toggles, color_map)
-
     blocks: list[FormattedBlock] = []
     source_patterns = _compile_source_patterns(preflight.source_types)
     known_names = {c.name.upper(): c.name for c in preflight.characters}
@@ -1114,11 +1117,12 @@ def _format_mixed_media(
         m = RE_SECTION_HEADER.match(line)
         if m:
             if in_source_block:
-                blocks.append(FormattedBlock(
-                    block_type=BlockType.SOURCE_LABEL_CLOSE,
-                    text="",
-                    source_line=line_num,
-                ))
+                if toggles.source_labels:
+                    blocks.append(FormattedBlock(
+                        block_type=BlockType.SOURCE_LABEL_CLOSE,
+                        text="",
+                        source_line=line_num,
+                    ))
                 in_source_block = False
             title = m.group(1).strip()
             if title.startswith("[") and title.endswith("]"):
@@ -1146,26 +1150,29 @@ def _format_mixed_media(
         # Document Archive headers act as section dividers
         if match_result and match_result[0] in ("document_archive", "document_section"):
             if in_source_block:
-                blocks.append(FormattedBlock(
-                    block_type=BlockType.SOURCE_LABEL_CLOSE,
-                    text="",
-                    source_line=line_num,
-                ))
+                if toggles.source_labels:
+                    blocks.append(FormattedBlock(
+                        block_type=BlockType.SOURCE_LABEL_CLOSE,
+                        text="",
+                        source_line=line_num,
+                    ))
+                in_source_block = False
             source_type, label = match_result
-            block = FormattedBlock(
-                block_type=BlockType.SOURCE_LABEL_OPEN,
-                text=label,
-                source_type=source_type,
-                bold=True,
-                is_centered=True,
-                source_line=line_num,
-                match_pattern="RE_SOURCE_LABEL",
-            )
-            if toggles.section_breaks and not first_section:
-                block.page_break_before = True
-            first_section = False
+            if toggles.source_labels:
+                block = FormattedBlock(
+                    block_type=BlockType.SOURCE_LABEL_OPEN,
+                    text=label,
+                    source_type=source_type,
+                    bold=True,
+                    is_centered=True,
+                    source_line=line_num,
+                    match_pattern="RE_SOURCE_LABEL",
+                )
+                if toggles.section_breaks and not first_section:
+                    block.page_break_before = True
+                first_section = False
+                blocks.append(block)
             in_source_block = True
-            blocks.append(block)
             current_speaker = None
             continue
 
@@ -1209,20 +1216,23 @@ def _format_mixed_media(
 
             # Other source labels open a new container
             if in_source_block:
+                if toggles.source_labels:
+                    blocks.append(FormattedBlock(
+                        block_type=BlockType.SOURCE_LABEL_CLOSE,
+                        text="",
+                        source_line=line_num,
+                    ))
+                in_source_block = False
+            if toggles.source_labels:
                 blocks.append(FormattedBlock(
-                    block_type=BlockType.SOURCE_LABEL_CLOSE,
-                    text="",
+                    block_type=BlockType.SOURCE_LABEL_OPEN,
+                    text=label,
+                    source_type=source_type,
+                    bold=True,
+                    is_centered=True,
                     source_line=line_num,
+                    match_pattern="RE_SOURCE_LABEL",
                 ))
-            blocks.append(FormattedBlock(
-                block_type=BlockType.SOURCE_LABEL_OPEN,
-                text=label,
-                source_type=source_type,
-                bold=True,
-                is_centered=True,
-                source_line=line_num,
-                match_pattern="RE_SOURCE_LABEL",
-            ))
             in_source_block = True
             current_speaker = None
             continue
@@ -1231,11 +1241,12 @@ def _format_mixed_media(
         narrative_m = RE_NARRATIVE_LABEL.match(line)
         if narrative_m:
             if in_source_block:
-                blocks.append(FormattedBlock(
-                    block_type=BlockType.SOURCE_LABEL_CLOSE,
-                    text="",
-                    source_line=line_num,
-                ))
+                if toggles.source_labels:
+                    blocks.append(FormattedBlock(
+                        block_type=BlockType.SOURCE_LABEL_CLOSE,
+                        text="",
+                        source_line=line_num,
+                    ))
                 in_source_block = False
             block = FormattedBlock(
                 block_type=BlockType.SECTION_HEADER,
@@ -1422,7 +1433,7 @@ def _format_mixed_media(
             blocks.append(block)
 
     # Close any open source block
-    if in_source_block:
+    if in_source_block and toggles.source_labels:
         blocks.append(FormattedBlock(
             block_type=BlockType.SOURCE_LABEL_CLOSE,
             text="",
