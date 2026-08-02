@@ -23,7 +23,9 @@ from vo_format.readview.library import (
     words_in,
 )
 
-LIBRARY_PY = Path(__file__).resolve().parents[1] / "vo_format" / "readview" / "library.py"
+LIBRARY_PY = (
+    Path(__file__).resolve().parents[1] / "vo_format" / "readview" / "library.py"
+)
 
 
 def _entry(
@@ -52,7 +54,9 @@ def _readview(words: int | None) -> str:
 REAL_ENTRIES = [
     _entry("CassetteLore", "Warcraft Episode 1 The Fall of Quel'Thalas v8 - formatted"),
     _entry("CassetteLore", "Warhammer 40K Episode 4 The Burning v6 - batched"),
-    _entry("Birds of Play", "The Complete Story of Kingdom Hearts Dark Road - formatted"),
+    _entry(
+        "Birds of Play", "The Complete Story of Kingdom Hearts Dark Road - formatted"
+    ),
 ]
 
 
@@ -95,7 +99,9 @@ class TestGrouping:
         assert html.index("Cassette Lore") < html.index("Birds of Play")
 
     def test_unknown_channel_passes_through_and_sorts_last(self):
-        html = render_index([*REAL_ENTRIES, _entry("Some New Show", "Pilot - formatted")])
+        html = render_index(
+            [*REAL_ENTRIES, _entry("Some New Show", "Pilot - formatted")]
+        )
         assert len(re.findall(r"<details", html)) == 3
         assert "Some New Show" in html
         assert html.index("Birds of Play") < html.index("Some New Show")
@@ -189,7 +195,9 @@ class TestRowsCarryWhatTheHandlerNeeds:
         assert len(re.findall(r'class="check"', html)) == len(REAL_ENTRIES)
 
     def test_the_date_is_shown(self):
-        html = render_index([_entry("CassetteLore", "Thing - formatted", date="2026-01-09")])
+        html = render_index(
+            [_entry("CassetteLore", "Thing - formatted", date="2026-01-09")]
+        )
         assert "2026-01-09" in html
 
 
@@ -238,7 +246,9 @@ class TestWordsIn:
 
     def test_a_non_numeric_attribute_yields_none(self, tmp_path: Path):
         path = tmp_path / "a - readview.html"
-        path.write_text(_readview(None).replace("data-title", 'data-words="lots" data-title'))
+        path.write_text(
+            _readview(None).replace("data-title", 'data-words="lots" data-title')
+        )
         assert words_in(path) is None
 
     def test_a_file_that_is_not_a_readview_yields_none(self, tmp_path: Path):
@@ -299,7 +309,9 @@ class TestSelfContainment:
         assert imports, "no imports found - did the file move?"
         for name in imports:
             root = name.split(".")[0]
-            assert root != "vo_format", f"relative/package import would break piping: {name}"
+            assert root != "vo_format", (
+                f"relative/package import would break piping: {name}"
+            )
             assert root in sys.stdlib_module_names, f"non-stdlib import: {name}"
 
     def test_page_references_no_external_host(self):
@@ -315,6 +327,10 @@ class TestSelfContainment:
             input=LIBRARY_PY.read_text(encoding="utf-8"),
             capture_output=True,
             text=True,
+            # library.py is UTF-8 and contains non-Latin-1 characters. Without
+            # this, the pipe is encoded with the machine's locale codec (cp1252
+            # on Windows) and the test fails for reasons unrelated to the code.
+            encoding="utf-8",
         )
         assert result.returncode == 0, result.stderr
         html = (tmp_path / "index.html").read_text(encoding="utf-8")
