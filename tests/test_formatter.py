@@ -427,3 +427,53 @@ def test_ratio_boundary_exactly_half_is_not_refused():
     joined = "\n".join(b.text for b in blocks)
     assert "Line three" in joined
     assert "Line four" in joined
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for source_labels=False delegation bug (#16)
+# ---------------------------------------------------------------------------
+
+
+def _load_sample(name: str) -> str:
+    import os
+    sample_path = os.path.join(
+        os.path.dirname(__file__), "..", "vo_format", "samples", name
+    )
+    with open(sample_path, "r", encoding="utf-8") as fh:
+        return normalize_text(fh.read())
+
+
+def _source_labels_sequence_equal(archetype, sample_text, preflight):
+    toggles_on = resolve_toggles(archetype)
+    toggles_on.source_labels = True
+    toggles_on.title_page = False
+    toggles_on.character_legend = False
+
+    toggles_off = resolve_toggles(archetype)
+    toggles_off.source_labels = False
+    toggles_off.title_page = False
+    toggles_off.character_legend = False
+
+    blocks_on = format_script(sample_text, preflight, toggles_on, "sample.md")
+    blocks_off = format_script(sample_text, preflight, toggles_off, "sample.md")
+
+    on_stripped = [
+        (b.block_type, b.text)
+        for b in blocks_on
+        if b.block_type not in (BlockType.SOURCE_LABEL_OPEN, BlockType.SOURCE_LABEL_CLOSE)
+    ]
+    off_tuples = [(b.block_type, b.text) for b in blocks_off]
+
+    assert on_stripped == off_tuples
+
+
+def test_source_labels_off_preserves_document_archive_block_sequence():
+    text = _load_sample("document_archive_sample.md")
+    preflight = _empty_preflight(Archetype.DOCUMENT_ARCHIVE)
+    _source_labels_sequence_equal(Archetype.DOCUMENT_ARCHIVE, text, preflight)
+
+
+def test_source_labels_off_preserves_mixed_media_block_sequence():
+    text = _load_sample("mixed_media_sample.md")
+    preflight = _empty_preflight(Archetype.MIXED_MEDIA)
+    _source_labels_sequence_equal(Archetype.MIXED_MEDIA, text, preflight)
